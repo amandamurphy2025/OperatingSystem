@@ -7,6 +7,8 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include <list.h>
+#include <stdlib.h>
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -30,11 +32,23 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+struct timer_elem
+{
+  /* timer list information */
+  struct list_elem list_elem;
+
+  /* thread associated with timer */
+  struct thread *t;
+};
+
+struct list timer_list;
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
 timer_init (void) 
 {
+  list_init(&timer_list);
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -84,16 +98,47 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/* Compares the expiration of two timers */
+bool timer_compare(const struct list_elem *a,
+                   const struct list_elem *b,
+                   void *aux)
+{
+  struct timer_elem *ta = list_entry(a, struct timer_elem, list_elem);
+  struct timer_elem *tb = list_entry(b, struct timer_elem, list_elem);
+
+  return ta->t->expiration_ticks - tb->t->expiration_ticks;
+}
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  /* Can't sleep for a negative amount of time */
+  if (ticks < 0)
+  {
+    return;
+  }
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  /* get current thread */
+  struct thread *current_thread = thread_current();
+
+  /* calculate expiration */
+  int64_t start = timer_ticks();
+  int64_t expiration_ticks = ticks + start;
+  current_thread->expiration_ticks = expiration_ticks;
+
+  /* create timer elem object to represent thread */
+  struct timer_elem *timer = malloc(sizeof(struct timer_elem));
+  timer->t = current_thread;
+
+  /* insert into list */
+  enum intr_level old_level = intr_disable(); 
+  list_insert_ordered(&timer_list, &(timer->list_elem), &timer_compare, NULL);
+  intr_set_level(old_level);
+
+  /* Sleep thread */
+  sema_down(&(current_thread->timer_sem));
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +217,24 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  /* Walk through the list and remove expired timers */
+  enum intr_level old_level = intr_disable();
+  struct list_elem *e; 
+
+  for (e = list_begin(&timer_list); e != list_end(&timer_list); e = list_next(e))
+  {
+    struct timer_elem *timer = list_entry(e, struct timer_elem, list_elem);
+    if (ticks >= timer->t->expiration_ticks)
+    {
+      list_remove(e);
+      sema_up(&(timer->t->timer_sem));
+    }
+  }
+
+  // resume interrupts at their previous level
+  intr_set_level(old_level);
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
