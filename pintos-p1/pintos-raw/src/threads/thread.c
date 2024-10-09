@@ -201,6 +201,12 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  //compare
+  if (thread_current ()->priority < priority){
+    thread_yield();
+  }
+
+
   return tid;
 }
 
@@ -237,7 +243,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+
+  //change list_push_back to inserting in order
+  list_insert_ordered (&ready_list, &t->elem, find_higher_priority, 0);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -307,8 +315,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+    //change push_back to insert_ordered
+    list_insert_ordered (&ready_list, &cur->elem, find_higher_priority, 0);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -336,6 +346,14 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  //thread_yield();
+  //yield here if the thread's priority is not the highest...
+  struct list_elem *highest = list_front (&ready_list);
+  struct thread *highest_in_ready_list = list_entry(highest, struct thread, elem);
+  if (highest_in_ready_list->priority > thread_current ()->priority) {
+    thread_yield();
+  }
+
 }
 
 /* Returns the current thread's priority. */
@@ -583,3 +601,27 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/*
+next function is based off example in A.8.5 of WHOLE-PDF-PINTOS.pdf.
+Compare two elements of a list and return True if the first one is more than the second,
+False otherwise.
+*/
+bool find_higher_priority (const struct list_elem *thread1, const struct list_elem *thread2, void *aux UNUSED)
+{
+  //get thread pointer using list_entry
+  //last arg is elem, which is MEMBER --> attribute of thread struct
+  struct thread *first_thread = list_entry(thread1, struct thread, elem);
+  struct thread *second_thread = list_entry(thread2, struct thread, elem);
+  return first_thread->priority > second_thread->priority;
+}
+
+/*
+want to sort the ready list
+*/
+void ready_list_sorting(void)
+{
+  //structure from list.h: list_sort (struct list *, list_less_func *, void *aux)
+  list_sort(&ready_list, find_higher_priority, 0);
+
+}

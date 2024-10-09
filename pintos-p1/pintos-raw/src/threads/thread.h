@@ -89,9 +89,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    struct list_elem donations;         /* Donated Threads */
     struct list_elem allelem;           /* List element for all threads list. */
     struct semaphore timer_sem;         /* Timer semaphore used for sleeping and waking up */
     uint64_t expiration_ticks;          /* Wake up time for timer */
+    struct lock *waiting_on_lock;        /* If blocked, waiting on this lock */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -140,5 +142,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool find_higher_priority (const struct list_elem *thread1, const struct list_elem *thread_2, void *aux);
+void ready_list_sorting(void);
 
 #endif /* threads/thread.h */
