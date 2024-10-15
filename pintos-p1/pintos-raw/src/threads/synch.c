@@ -32,10 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-int grab_highest_priority(struct thread *t);
-void donate (struct thread *gimme);
-
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -117,15 +113,16 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)){
-    //we want to pop the highest priority thread waiting
-    struct list_elem *top_waiter = list_max (&sema->waiters, find_higher_priority, 0);
-    list_remove(top_waiter);
-    thread_unblock (list_entry (top_waiter,
-                                struct thread, elem));
-
-  }
   sema->value++;
+
+  //CHANGES HERE - find the waiting thread with the HIGHEST priority in
+  //remove this thread from the waiting list
+  //unblock this same thread and yield if needed (yield is called in thread_unblock)
+  if (!list_empty (&sema->waiters)) {
+    struct list_elem *top_waiter = list_max(&sema->waiters, find_higher_priority, 0);
+    list_remove(top_waiter);
+    thread_unblock (list_entry (top_waiter, struct thread, elem));
+  }
   intr_set_level (old_level);
 }
 
@@ -205,6 +202,11 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  //LOGIC: if someone else is holding the thread AND their priority is lower than the thread trying to acquire the lock
+  //set the current thread's waiting_on_lock to the lock
+  //donate priority (see function at bottom)
+  //ELSE if nobody has the lock, give it to the current thread
+
   struct thread *curr = thread_current ();
 
   if (lock->holder != NULL){
@@ -213,23 +215,10 @@ lock_acquire (struct lock *lock)
       donate(lock->holder);
     }
   }
+
   sema_down (&lock->semaphore);
   curr->waiting_on_lock = NULL;
   lock->holder = thread_current ();
-
-  // //only need to handle donation if lock is being held elsewhere
-  // if (lock->holder != NULL){
-  //   thread_current ()->waiting_on_lock = lock;
-  //   //only need to do donation if the lock holder has less priority than the current thread
-  //   if (lock->holder->priority < thread_current ()->priority){
-  //     //insert the current thread into the holder's donation list
-  //     list_insert_ordered (&(lock->holder->donations), &(thread_current ())->elem, find_higher_priority, 0);
-  //     //change the holder's priority if it is less than the max of its donation list
-  //     if (list_max (&(lock->holder->donations), find_higher_priority, 0) > lock->holder->priority){
-  //       lock->holder->priority = list_max (&(lock->holder->donations), find_higher_priority, 0)
-  //     }
-  //   }
-  // }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -263,6 +252,11 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  //LOGIC: each thread has a list of other threads that donated to it
+  //lock_release traverses through this list and checks if the released lock is the lock the donator is waiting on
+  //if the locks match, this donator is removed from the donation list
+  //then, since the donation list changed, we must recalculate the priority (see function at bottom)
+
   struct thread *curr = thread_current ();
   
   struct list_elem *traverse;
@@ -282,6 +276,7 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -386,31 +381,6 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 }
 
-struct thread *find_highest_thread_waiting_on_lock(struct lock *lock){
-  struct list_elem *elem;
-
-  struct semaphore *lock_sema = &lock->semaphore;
-
-  elem = list_max(&lock_sema->waiters, find_higher_priority, 0);
-
-  struct thread *highest = list_entry(elem, struct thread, elem);
-
-  return highest;
-
-}
-
-bool find_higher_cond (const struct list_elem *thread1, const struct list_elem *thread2, void *aux UNUSED)
-{
-  //get thread pointer using list_entry
-  //last arg is elem, which is MEMBER --> attribute of thread struct
-  struct thread *first_thread = list_entry(thread1, struct thread, cond_waiter);
-  struct thread *second_thread = list_entry(thread2, struct thread, cond_waiter);
-  return first_thread->priority > second_thread->priority;
-}
-
-/*
-returns the max priority by comparing the donations list to the original priority
-*/
 int grab_highest_priority(struct thread *t){
 
 
@@ -427,7 +397,6 @@ int grab_highest_priority(struct thread *t){
    return original;
  }
  return biggest_donator->priority;
-
 
 }
 
@@ -447,3 +416,6 @@ void donate (struct thread *gimme){
     gimme = gimme->received;
   }
 }
+
+
+

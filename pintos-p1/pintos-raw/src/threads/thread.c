@@ -246,7 +246,11 @@ thread_unblock (struct thread *t)
 
   //compare
   if (thread_current ()->priority < t->priority && thread_current () != idle_thread){
-    thread_yield();
+    if (intr_context ()){
+      intr_yield_on_return ();
+    } else {
+      thread_yield ();
+    }
   }
 }
 
