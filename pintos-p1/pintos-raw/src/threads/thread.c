@@ -244,7 +244,8 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
-  //compare
+  //compare and check if the thread should yield, and yield right away or after returning.
+  //it yields if the running thread's priority is less than the newly unblocked thread's priority.
   if (thread_current ()->priority < t->priority && thread_current () != idle_thread){
     if (intr_context ()){
       intr_yield_on_return ();
@@ -352,13 +353,16 @@ thread_set_priority (int new_priority)
 
   enum intr_level old_level = intr_disable ();
 
+  //set the original priority to the new one no matter what.
   curr->original_priority = new_priority;
 
+  //Set the priority to the highest.  If new_priority is bigger than any donators, then this will prevail.
+  //see synch.c for function description of grab_highest_priority.
   curr->priority = grab_highest_priority(curr);
 
   intr_set_level (old_level);
 
-  //yield here if the thread's priority is not the highest...
+  //yield here if the thread's priority is not the highest anymore...
   struct list_elem *highest = list_max (&ready_list, find_higher_priority, 0);
   struct thread *highest_in_ready_list = list_entry(highest, struct thread, elem);
   if (highest_in_ready_list->priority > thread_current ()->priority) {
@@ -491,10 +495,12 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  //ADDED - original_priority intial value is just the given priority
   t->original_priority = priority;
   t->magic = THREAD_MAGIC;
   sema_init(&(t->timer_sem), 0);
 
+  //ADDED - initializing additional fields
   list_init(&t->donations);
   t->received = NULL;
   t->waiting_on_lock = NULL;
@@ -528,6 +534,8 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else{
+    
+    //ADDED - used list_max to make sure the thread returned has the highest priority in the ready list.
     struct list_elem *highest_in_ready = list_max(&ready_list, find_higher_priority, 0);
     list_remove(highest_in_ready);
     struct thread *highest = list_entry(highest_in_ready, struct thread, elem);
@@ -624,8 +632,8 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /*
 next function is based off example in A.8.5 of WHOLE-PDF-PINTOS.pdf.
-Compare two elements of a list and return True if the first one is more than the second,
-False otherwise.
+Compare two elements of a list and return FALSE if the first one is more than the second,
+TRUE otherwise.
 */
 bool find_higher_priority (const struct list_elem *thread1, const struct list_elem *thread2, void *aux UNUSED)
 {
@@ -635,30 +643,3 @@ bool find_higher_priority (const struct list_elem *thread1, const struct list_el
   struct thread *second_thread = list_entry(thread2, struct thread, elem);
   return first_thread->priority < second_thread->priority;
 }
-
-/*
-want to sort the ready list
-*/
-void ready_list_sorting(void)
-{
-  //structure from list.h: list_sort (struct list *, list_less_func *, void *aux)
-  list_sort(&ready_list, find_higher_priority, 0);
-
-}
-
-// void donate (struct thread *gimme){
-//   struct thread *philanthropist = thread_current ();
-
-//   ASSERT (philanthropist->priority > gimme->priority);
-
-//   while (gimme != NULL){
-//     if (gimme != philanthropist->received){
-//       list_push_back(&gimme->donations, &philanthropist->donate_elem);
-//     }
-//     gimme->priority = philanthropist->priority;
-//     philanthropist->received = gimme;
-
-//     philanthropist = gimme;
-//     gimme = gimme->received;
-//   }
-// }
