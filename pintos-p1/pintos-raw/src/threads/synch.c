@@ -419,7 +419,7 @@ If it has not, then the philanthropist donates to Gimme (adds to gimme's donatio
 
 Now we go deeper.
 Set the philanthropist's received field to Gimme (for loop checking)
-Make gimme's priority the highest out of the original and the donation list (should be philanthropist's priority).
+Make gimme's priority the philanthropist's priority.
 Make the Philanthropist Gimme.
 Make Gimme gimme->received, the thread that gimme has donated to (if any).
 This will make sure that the new donation will percolate down if the locks are nested.
