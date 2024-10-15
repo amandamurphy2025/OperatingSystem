@@ -348,11 +348,10 @@ thread_set_priority (int new_priority)
 
   enum intr_level old_level = intr_disable ();
 
-  if (new_priority > curr->original_priority || curr->original_priority == curr->priority){
-    curr->priority = new_priority;
-  }
-
   curr->original_priority = new_priority;
+
+  curr->priority = grab_highest_priority(curr);
+
   intr_set_level (old_level);
 
   //yield here if the thread's priority is not the highest...
