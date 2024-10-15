@@ -89,7 +89,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    struct list_elem donations;         /* Donated Threads */
+    int original_priority;
+    struct list donations;              /* Donated Threads */
+    struct list_elem donate_elem;
+    struct thread *received;
+    struct list_elem cond_waiter;
     struct list_elem allelem;           /* List element for all threads list. */
     struct semaphore timer_sem;         /* Timer semaphore used for sleeping and waking up */
     uint64_t expiration_ticks;          /* Wake up time for timer */

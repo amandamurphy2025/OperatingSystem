@@ -201,11 +201,6 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  //compare
-  if (thread_current ()->priority < priority){
-    thread_yield();
-  }
-
 
   return tid;
 }
@@ -245,9 +240,14 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
 
   //change list_push_back to inserting in order
-  list_insert_ordered (&ready_list, &t->elem, find_higher_priority, 0);
+  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+
+  //compare
+  if (thread_current ()->priority < t->priority && thread_current () != idle_thread){
+    thread_yield();
+  }
 }
 
 /* Returns the name of the running thread. */
@@ -316,8 +316,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    //change push_back to insert_ordered
-    list_insert_ordered (&ready_list, &cur->elem, find_higher_priority, 0);
+    list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -345,10 +344,19 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  //thread_yield();
+  struct thread *curr = thread_current ();
+
+  enum intr_level old_level = intr_disable ();
+
+  if (new_priority > curr->original_priority || curr->original_priority == curr->priority){
+    curr->priority = new_priority;
+  }
+
+  curr->original_priority = new_priority;
+  intr_set_level (old_level);
+
   //yield here if the thread's priority is not the highest...
-  struct list_elem *highest = list_front (&ready_list);
+  struct list_elem *highest = list_max (&ready_list, find_higher_priority, 0);
   struct thread *highest_in_ready_list = list_entry(highest, struct thread, elem);
   if (highest_in_ready_list->priority > thread_current ()->priority) {
     thread_yield();
@@ -480,8 +488,13 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority;
   t->magic = THREAD_MAGIC;
   sema_init(&(t->timer_sem), 0);
+
+  list_init(&t->donations);
+  t->received = NULL;
+  t->waiting_on_lock = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -511,8 +524,12 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+    struct list_elem *highest_in_ready = list_max(&ready_list, find_higher_priority, 0);
+    list_remove(highest_in_ready);
+    struct thread *highest = list_entry(highest_in_ready, struct thread, elem);
+    return highest;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -613,7 +630,7 @@ bool find_higher_priority (const struct list_elem *thread1, const struct list_el
   //last arg is elem, which is MEMBER --> attribute of thread struct
   struct thread *first_thread = list_entry(thread1, struct thread, elem);
   struct thread *second_thread = list_entry(thread2, struct thread, elem);
-  return first_thread->priority > second_thread->priority;
+  return first_thread->priority < second_thread->priority;
 }
 
 /*
@@ -625,3 +642,20 @@ void ready_list_sorting(void)
   list_sort(&ready_list, find_higher_priority, 0);
 
 }
+
+// void donate (struct thread *gimme){
+//   struct thread *philanthropist = thread_current ();
+
+//   ASSERT (philanthropist->priority > gimme->priority);
+
+//   while (gimme != NULL){
+//     if (gimme != philanthropist->received){
+//       list_push_back(&gimme->donations, &philanthropist->donate_elem);
+//     }
+//     gimme->priority = philanthropist->priority;
+//     philanthropist->received = gimme;
+
+//     philanthropist = gimme;
+//     gimme = gimme->received;
+//   }
+// }
