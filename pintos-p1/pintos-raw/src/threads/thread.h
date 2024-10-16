@@ -88,16 +88,15 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    int original_priority;
-    struct list donations;              /* Donated Threads */
-    struct list_elem donate_elem;
-    struct thread *received;
-    struct list_elem cond_waiter;
+    int priority;                       /* Priority - max of donations and original. */
+    int original_priority;              /* ADDED - The original/true priority of the thread */
+    struct list donations;              /* ADDED - List of threads that donate to this thread */
+    struct list_elem donate_elem;       /* ADDED - List element for the donations list */
+    struct thread *received;            /* ADDED - Tracks which thread this thread has donated to */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct semaphore timer_sem;         /* Timer semaphore used for sleeping and waking up */
-    uint64_t expiration_ticks;          /* Wake up time for timer */
-    struct lock *waiting_on_lock;        /* If blocked, waiting on this lock */
+    struct semaphore timer_sem;         /* ADDED - Timer semaphore used for sleeping and waking up */
+    uint64_t expiration_ticks;          /* ADDED - Wake up time for timer */
+    struct lock *waiting_on_lock;       /* ADDED - If blocked, waiting on this lock */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -147,7 +146,10 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/*
+ADDED HERE-
+See function header in thread.c.  This is list_less_func essentially.
+*/
 bool find_higher_priority (const struct list_elem *thread1, const struct list_elem *thread_2, void *aux);
-void ready_list_sorting(void);
 
 #endif /* threads/thread.h */

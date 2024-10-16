@@ -410,17 +410,23 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 }
 
-int grab_highest_priority(struct thread *t){
+/*
+INPUT: thread t
+OUTPUT: int (the highest priority)
 
+This function will find the highest priority out of the donation list and the original priority.
+First, it grabs the original.
+Then, it finds the max priority of thread t's donation list.
+Then, it compares these two values and returns whichever is larger.
+*/
+
+int grab_highest_priority(struct thread *t){
 
  int original = t->original_priority;
 
-
  struct list_elem *elem = list_max (&(t->donations), find_higher_priority, 0);
 
-
  struct thread *biggest_donator = list_entry(elem, struct thread, donate_elem);
-
 
  if (original > biggest_donator->priority){
    return original;
@@ -428,6 +434,25 @@ int grab_highest_priority(struct thread *t){
  return biggest_donator->priority;
 
 }
+
+/*
+INPUT: thread gimme ("gimme priority")
+OUTPUT: void
+
+Thread Gimme wants priority!  Gimme is holding the lock.
+Philanthropist is originally the thread that called lock_acquire.
+
+Checks if the philanthropist has donated to gimme before.
+If it has, then the philanthropist does NOT donate again (prevent looping)
+If it has not, then the philanthropist donates to Gimme (adds to gimme's donation list)
+
+Now we go deeper.
+Set the philanthropist's received field to Gimme (for loop checking)
+Make gimme's priority the philanthropist's priority.
+Make the Philanthropist Gimme.
+Make Gimme gimme->received, the thread that gimme has donated to (if any).
+This will make sure that the new donation will percolate down if the locks are nested.
+*/
 
 void donate (struct thread *gimme){
   struct thread *philanthropist = thread_current ();
