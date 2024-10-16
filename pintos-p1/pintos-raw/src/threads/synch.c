@@ -360,9 +360,38 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  //CHANGES HERE - find the waiting semaphore with the HIGHEST priority and
+  //remove this semaphore from the waiting list
+  //call sema up on the highest priority semaphore
+  if (!list_empty (&cond->waiters)) {
+    // Walk through the list and find the top waiter
+    struct list_elem *top_waiter = NULL;
+    int highest_priority = 0;
+    struct list_elem *e;
+    for(e = list_begin(&cond->waiters); e != list_end(&cond->waiters); e = list_next(e))
+    {
+      struct semaphore sema = list_entry(e, struct semaphore_elem, elem)->semaphore;
+      // since this is a condition semaphore, there is only ever one waiter
+      struct list_elem *elem = list_front(&sema.waiters); 
+      struct thread *t = list_entry(elem, struct thread, elem);
+
+      if(t->priority > highest_priority)
+      {
+        highest_priority = t->priority;
+        top_waiter = e;
+      }
+    }
+
+
+    if (top_waiter != NULL)
+    {
+      list_remove(top_waiter);
+    
+      // get semaphore and wake it up
+      struct semaphore_elem *sema_elem = list_entry(top_waiter, struct semaphore_elem, elem);
+      sema_up(&sema_elem->semaphore);
+    }
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
