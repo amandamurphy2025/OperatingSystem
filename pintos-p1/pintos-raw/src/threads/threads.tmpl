@@ -1,0 +1,314 @@
+			+--------------------+
+			|        CS 140      |
+			| PROJECT 1: THREADS |
+			|   DESIGN DOCUMENT  |
+			+--------------------+
+				   
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Chris Marshall <chrismarshall@uchicago.edu>
+Amanda Murphy <akmurphak@uchicago.edu>
+
+---- PRELIMINARIES ----
+
+Our designs were inspired by the given guides and discussions with TAs
+during office hours. Work was split 50% Chris and 50% Amanda.
+
+			     ALARM CLOCK
+			     ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct timer_elem
+{
+  /* timer list information */
+  struct list_elem list_elem;
+
+  /* thread associated with timer */
+  struct thread *t;
+};
+
+Above is a list structure to hold threads that are currently asleep.
+
+struct list timer_list;
+
+Above is the literal variable for the list of currently sleeping threads.
+
+struct lock timer_lock;
+
+Above is the lock for accessing the timer_list.
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority - max of donations and original. */
+    int original_priority;              /* ADDED - The original/true priority of the thread */
+    struct list donations;              /* ADDED - List of threads that donate to this thread */
+    struct list_elem donate_elem;       /* ADDED - List element for the donations list */
+    struct thread *received;            /* ADDED - Tracks which thread this thread has donated to */
+    struct list_elem allelem;           /* List element for all threads list. */
+    struct semaphore timer_sem;         /* ADDED - Timer semaphore used for sleeping and waking up */
+    uint64_t expiration_ticks;          /* ADDED - Wake up time for timer */
+    struct lock *waiting_on_lock;       /* ADDED - If blocked, waiting on this lock */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+
+Above, we added the timer semaphore which is used to put to sleep and wake up 
+the thread, as well as expiration_ticks which is the wake up time.
+
+---- ALGORITHMS ----
+
+A call to timer sleep gets the current thread, calculates the wakeup time
+from the current time and the sleep ticks, inserts this into the list of 
+sleeping threads, and puts the thread to sleep.
+
+The time spent in the interrupt handler is a very small amount of 
+calculations. Keeping a sorted loop of timers allows us to find the ones that
+are expired very quickly.
+
+---- SYNCHRONIZATION ----
+
+The only possible chance of a race condition is when inserting into the shared
+data of the timer list. We prevent this race condition using a lock. 
+
+Interrupts are turned off, which means the only thread editing the list at any
+time is the OS. This avoids all race conditions.
+
+---- RATIONALE ----
+
+We chose this design for simplicity and ease of maintainability while still 
+being performant. This design was largely inspired by the guide document 
+given.
+
+			 PRIORITY SCHEDULING
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority - max of donations and original. */
+    int original_priority;              /* ADDED - The original/true priority of the thread */
+    struct list donations;              /* ADDED - List of threads that donate to this thread */
+    struct list_elem donate_elem;       /* ADDED - List element for the donations list */
+    struct thread *received;            /* ADDED - Tracks which thread this thread has donated to */
+    struct list_elem allelem;           /* List element for all threads list. */
+    struct semaphore timer_sem;         /* ADDED - Timer semaphore used for sleeping and waking up */
+    uint64_t expiration_ticks;          /* ADDED - Wake up time for timer */
+    struct lock *waiting_on_lock;       /* ADDED - If blocked, waiting on this lock */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+
+Above, the fields original_priority (the true set priority of the thread), received (the thread that this thread donated to),
+waiting_on_lock (the lock this thread is blocked by), donations (list of threads that donate to this one), and donate_elem (list_elem for donations list) were added.
+
+
+>> B2: Explain the data structure used to track priority donation.
+>> Use ASCII art to diagram a nested donation.  (Alternately, submit a
+>> .png file.)
+
+The main data structure is a list.  Each thread has a list of other threads that are donating to it.
+The priority field is set to the max of this list and the original_priority, acting as the effective priority.
+The received field is used to keep track of nested donations.  Whoever calls donate(), their priority will waterfall down.
+
+Example: C has the lock.
+ ____________      ____________      _____________
+|            |    |            |    |             |
+|thread A (6)| -> |thread B (5)| -> | thread C (4)| 
+|____________|    |____________|    |_____________|
+
+B wants the lock and calls donate() in lock_acquire().
+ ____________      ____________      _____________
+|            |    |            |    |             |
+|thread A (6)| -> |thread B (5)| -> | thread C (5)| 
+|____________|    |____________|    |_____________|
+
+A wants the lock and calls donate in lock_acquire().
+ ____________      ____________      _____________
+|            |    |            |    |             |
+|thread A (6)| -> |thread B (6)| -> | thread C (6)| 
+|____________|    |____________|    |_____________|
+
+Example:
+Thread A > Thread B > Thread C.  C has the lock.  B donated to C.  B->received = C.  When A donates to B, it goes down
+B's received field to donate to C as well.
+
+
+---- ALGORITHMS ----
+
+>> B3: How do you ensure that the highest priority thread waiting for
+>> a lock, semaphore, or condition variable wakes up first?
+
+
+In sema_up, list_max is used along with find_higher_priority(), which is a function I wrote to compare priorities.
+Using list_max and this function returns the highest priority thread waiting on the semaphore.  Sema_up is called in
+list_release.  This thread is then called in thread_unblock, which checks about yielding.
+
+
+>> B4: Describe the sequence of events when a call to lock_acquire()
+>> causes a priority donation.  How is nested donation handled?
+
+
+LOGIC: if someone else is holding the thread AND their priority is lower than the thread trying to acquire the lock.
+Set the current thread's waiting_on_lock to the lock.
+Donate priority:
+
+  Thread Gimme wants priority!  Gimme is holding the lock.
+  Philanthropist is originally the thread that called lock_acquire.
+
+  Checks if the philanthropist has donated to gimme before.
+  If it has, then the philanthropist does NOT donate again (prevent looping).
+  If it has not, then the philanthropist donates to Gimme (adds to gimme's donation list).
+
+  Now we go deeper.
+  Set the philanthropist's received field to Gimme (for loop checking)
+  Make gimme's priority the philanthropist's priority.
+  Make the Philanthropist Gimme.
+  Make Gimme gimme->received, the thread that gimme has donated to (if any).
+  This will make sure that the new donation will percolate down if the locks are nested.
+
+ELSE if nobody has the lock, give it to the current thread
+
+
+>> B5: Describe the sequence of events when lock_release() is called
+>> on a lock that a higher-priority thread is waiting for.
+
+
+LOGIC: each thread has a list of other threads that donated to it.
+Lock_release traverses through this list and checks if the released lock is the lock the donator is waiting on.
+If the locks match, this donator is removed from the donation list.
+Then, since the donation list changed, we must recalculate the priority of the thread that called release.
+
+---- SYNCHRONIZATION ----
+
+>> B6: Describe a potential race in thread_set_priority() and explain
+>> how your implementation avoids it.  Can you use a lock to avoid
+>> this race?
+
+There is a race condition in setting the original_priority and recalculating the priority.
+This is because this field is accessed in many different functions and will be shared across threads.
+Since it is a short section, I just disabled interrupts to perform this quick operation.
+
+---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+I chose the donation list design because it kept track of all the threads donating, and would be able
+to dynamically change along with their priorities.  It worked alike to the ready_list, so it was easy to understand,
+and all the list operations could apply on the donation list as well.
+
+			  ADVANCED SCHEDULER
+			  ==================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
+>> has a recent_cpu value of 0.  Fill in the table below showing the
+>> scheduling decision and the priority and recent_cpu values for each
+>> thread after each given number of timer ticks:
+
+timer  recent_cpu    priority   thread
+ticks   A   B   C   A   B   C   to run
+-----  --  --  --  --  --  --   ------
+ 0
+ 4
+ 8
+12
+16
+20
+24
+28
+32
+36
+
+>> C3: Did any ambiguities in the scheduler specification make values
+>> in the table uncertain?  If so, what rule did you use to resolve
+>> them?  Does this match the behavior of your scheduler?
+
+>> C4: How is the way you divided the cost of scheduling between code
+>> inside and outside interrupt context likely to affect performance?
+
+---- RATIONALE ----
+
+>> C5: Briefly critique your design, pointing out advantages and
+>> disadvantages in your design choices.  If you were to have extra
+>> time to work on this part of the project, how might you choose to
+>> refine or improve your design?
+
+>> C6: The assignment explains arithmetic for fixed-point math in
+>> detail, but it leaves it open to you to implement it.  Why did you
+>> decide to implement it the way you did?  If you created an
+>> abstraction layer for fixed-point math, that is, an abstract data
+>> type and/or a set of functions or macros to manipulate fixed-point
+>> numbers, why did you do so?  If not, why not?
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

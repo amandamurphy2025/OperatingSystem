@@ -42,6 +42,7 @@ struct timer_elem
 };
 
 struct list timer_list;
+struct lock timer_lock;
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -49,6 +50,7 @@ void
 timer_init (void) 
 {
   list_init(&timer_list);
+  lock_init(&timer_lock);
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -133,9 +135,11 @@ timer_sleep (int64_t ticks)
   timer->t = current_thread;
 
   /* insert into list */
-  enum intr_level old_level = intr_disable(); 
+  lock_acquire(&timer_lock); 
+  enum intr_level old_level = intr_disable();
   list_insert_ordered(&timer_list, &(timer->list_elem), &timer_compare, NULL);
   intr_set_level(old_level);
+  lock_release(&timer_lock);
 
   /* Sleep thread */
   sema_down(&(current_thread->timer_sem));
