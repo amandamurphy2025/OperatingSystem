@@ -6,21 +6,7 @@
 #include "threads/vaddr.h"
 
 //DECLARE
-void get_args_sys_halt(struct intr_frame *f, int *args);
-void get_args_sys_exit(struct intr_frame *f, int *args);
-void get_args_sys_exec(struct intr_frame *f, int *args);
-// void get_args_sys_wait(struct intr_frame *f, int *args);
-void get_args_sys_create(struct intr_frame *f, int *args);
-void get_args_sys_remove(struct intr_frame *f, int *args);
-void get_args_sys_open(struct intr_frame *f, int *args);
-void get_args_sys_filesize(struct intr_frame *f, int *args);
-void get_args_sys_read(struct intr_frame *f, int *args);
-void get_args_sys_write(struct intr_frame *f, int *args);
-void get_args_sys_seek(struct intr_frame *f, int *args);
-void get_args_sys_tell(struct intr_frame *f, int *args);
-void get_args_sys_close(struct intr_frame *f, int *args);
-
-static void syscall_handler (struct intr_frame *);
+static void syscall_handler (struct intr_frame *f);
 static int sys_exec (const char *cmd_line);
 void sys_halt (void);
 void sys_exit (int status);
@@ -34,6 +20,20 @@ int sys_write (int fd, const void *buffer, unsigned size);
 void sys_seek (int fd, unsigned position);
 unsigned sys_tell (int fd);
 void sys_close (int fd);
+
+void get_args_sys_halt(struct intr_frame *f, int *args);
+void get_args_sys_exit(struct intr_frame *f, int *args);
+void get_args_sys_exec(struct intr_frame *f, int *args);
+// void get_args_sys_wait(struct intr_frame *f, int *args);
+void get_args_sys_create(struct intr_frame *f, int *args);
+void get_args_sys_remove(struct intr_frame *f, int *args);
+void get_args_sys_open(struct intr_frame *f, int *args);
+void get_args_sys_filesize(struct intr_frame *f, int *args);
+void get_args_sys_read(struct intr_frame *f, int *args);
+void get_args_sys_write(struct intr_frame *f, int *args);
+void get_args_sys_seek(struct intr_frame *f, int *args);
+void get_args_sys_tell(struct intr_frame *f, int *args);
+void get_args_sys_close(struct intr_frame *f, int *args);
 
 /*HELPER FUNCTIONS DECLARED HERE*/
 struct file *search_file_table(int fd);
@@ -132,6 +132,48 @@ const int arg_counts[] = {
   1,
   1
 };
+
+
+static int sys_exec (const char *cmd_line){
+  return 0;
+}
+
+void sys_halt (void){
+  return 0;
+}
+
+
+bool sys_create (const char *file, unsigned initial_size){
+  return 0;
+}
+
+bool sys_remove (const char *file){
+  return 0;
+}
+
+int sys_open (const char *file){
+  return 0;
+}
+
+int sys_filesize (int fd){
+  return 0;
+}
+
+int sys_read (int fd, void *buffer, unsigned size){
+  return 0;
+}
+
+void sys_seek (int fd, unsigned position){
+  return 0;
+}
+
+unsigned sys_tell (int fd){
+  return 0;
+}
+
+void sys_close (int fd){
+  return 0;
+}
 
 
 void
