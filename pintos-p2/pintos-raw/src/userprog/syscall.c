@@ -3,14 +3,54 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
+//DECLARE
+void get_args_sys_halt(struct intr_frame *f, int *args);
+void get_args_sys_exit(struct intr_frame *f, int *args);
+void get_args_sys_exec(struct intr_frame *f, int *args);
+// void get_args_sys_wait(struct intr_frame *f, int *args);
+void get_args_sys_create(struct intr_frame *f, int *args);
+void get_args_sys_remove(struct intr_frame *f, int *args);
+void get_args_sys_open(struct intr_frame *f, int *args);
+void get_args_sys_filesize(struct intr_frame *f, int *args);
+void get_args_sys_read(struct intr_frame *f, int *args);
+void get_args_sys_write(struct intr_frame *f, int *args);
+void get_args_sys_seek(struct intr_frame *f, int *args);
+void get_args_sys_tell(struct intr_frame *f, int *args);
+void get_args_sys_close(struct intr_frame *f, int *args);
+
+static void syscall_handler (struct intr_frame *);
+static int sys_exec (const char *cmd_line);
+void sys_halt (void);
+void sys_exit (int status);
+// int sys_wait (pid_t pid);
+bool sys_create (const char *file, unsigned initial_size);
+bool sys_remove (const char *file);
+int sys_open (const char *file);
+int sys_filesize (int fd);
+int sys_read (int fd, void *buffer, unsigned size);
+int sys_write (int fd, const void *buffer, unsigned size);
+void sys_seek (int fd, unsigned position);
+unsigned sys_tell (int fd);
+void sys_close (int fd);
+
+/*HELPER FUNCTIONS DECLARED HERE*/
+struct file *search_file_table(int fd);
+int add_file_to_file_table(struct file *add_me_file);
+static void copy_in (void *dst_, const void *usrc_, size_t size);
+static char * copy_in_string (const char *us);
+static inline bool put_user (uint8_t *udst, uint8_t byte);
+static inline bool get_user (uint8_t *dst, const uint8_t *usrc);
+
+typedef void (*syscall_function)(struct intr_frame *, int *);
 
 syscall_function table[] = {
 
   get_args_sys_halt,
   get_args_sys_exit,
   get_args_sys_exec,
-  get_args_sys_wait,
+  // get_args_sys_wait,
   get_args_sys_create,
   get_args_sys_remove,
   get_args_sys_open,
@@ -21,58 +61,58 @@ syscall_function table[] = {
   get_args_sys_tell,
   get_args_sys_close
 
-}
+};
 
 //functions to get the args for the handlers
-void get_args_sys_halt(struct intr_frame *, int *args){
+void get_args_sys_halt(struct intr_frame *f, int *args){
   sys_halt();
 }
 
-void get_args_sys_exit(struct intr_frame *, int *args){
+void get_args_sys_exit(struct intr_frame *f, int *args){
   sys_exit(args[0]);
 }
 
-void get_args_sys_exec(struct intr_frame *, int *args){
+void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-void get_args_sys_wait(struct intr_frame *, int *args){
-  f->eax = sys_wait((pid_t)args[0]);
-}
+// void get_args_sys_wait(struct intr_frame *f, int *args){
+//   f->eax = sys_wait((pid_t)args[0]);
+// }
 
-void get_args_sys_create(struct intr_frame *, int *args){
+void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
 }
 
-void get_args_sys_remove(struct intr_frame *, int *args){
+void get_args_sys_remove(struct intr_frame *f, int *args){
   f->eax = sys_remove((const char *)args[0]);
 }
 
-void get_args_sys_open(struct intr_frame *, int *args){
+void get_args_sys_open(struct intr_frame *f, int *args){
   f->eax = sys_open((const char *)args[0]);
 }
 
-void get_args_sys_filesize(struct intr_frame *, int *args){
+void get_args_sys_filesize(struct intr_frame *f, int *args){
   f->eax = sys_filesize(args[0]);
 }
 
-void get_args_sys_read(struct intr_frame *, int *args){
+void get_args_sys_read(struct intr_frame *f, int *args){
   f->eax = sys_read(args[0], (void *)args[1], (unsigned)args[2]);
 }
 
-void get_args_sys_write(struct intr_frame *, int *args){
+void get_args_sys_write(struct intr_frame *f, int *args){
   f->eax = sys_write(args[0], (const void *)args[1], (unsigned)args[2]);
 }
 
-void get_args_sys_seek(struct intr_frame *, int *args){
+void get_args_sys_seek(struct intr_frame *f, int *args){
   sys_seek(args[0], (unsigned)args[1]);
 }
 
-void get_args_sys_tell(struct intr_frame *, int *args){
+void get_args_sys_tell(struct intr_frame *f, int *args){
   f->eax = sys_tell(args[0]);
 }
 
-void get_args_sys_close(struct intr_frame *, int *args){
+void get_args_sys_close(struct intr_frame *f, int *args){
   sys_close(args[0]);
 }
 
@@ -91,26 +131,7 @@ const int arg_counts[] = {
   2,
   1,
   1
-}
-
-static void syscall_handler (struct intr_frame *);
-static int sys_exec (const char *cmd_line);
-void sys_halt (void);
-void sys_exit (int status);
-int sys_wait (pid_t pid);
-bool sys_create (const char *file, unsigned initial_size);
-bool sys_remove (const char *file);
-int sys_open (const char *file);
-int sys_filesize (int fd);
-int sys_read (int fd, void *buffer, unsigned size);
-int sys_write (int fd, const void *buffer, unsigned size);
-void sys_seek (int fd, unsigned position);
-unsigned sys_tell (int fd);
-void sys_close (int fd);
-
-/*HELPER FUNCTIONS DECLARED HERE*/
-struct file *search_file_table(int fd);
-int add_file_to_file_table(struct file *add_me_file);
+};
 
 
 void
@@ -140,7 +161,7 @@ void sys_exit (int status){
 int sys_write (int fd, const void *buffer, unsigned size){
   
   if (buffer == NULL || !is_user_vaddr(buffer)){
-    sys_exit(-1)
+    sys_exit(-1);
   }
 
   //writing to console
@@ -268,23 +289,23 @@ return eax != 0;
 page that must be **freed with palloc_free_page()**. Truncates the string
 at PGSIZE bytes in size. Call thread_exit() if any of the user accesses
 are invalid. */
-static char *
-copy_in_string (const char *us)
-{
-  char *ks;
-  size_t length;
-  ks = palloc_get_page (0);
-  if (ks == NULL)
-    thread_exit ();
-  for (...)
-  {
-    ...;
-    // call get_user() until you see '\0'
-    ...;
-  }
-  return ks;
-  // don't forget to call palloc_free_page(..) when you're done
-  // with this page, before you return to user from syscall
-}
+// static char *
+// copy_in_string (const char *us)
+// {
+//   char *ks;
+//   size_t length;
+//   ks = palloc_get_page (0);
+//   if (ks == NULL)
+//     thread_exit ();
+//   for (...)
+//   {
+//     ...;
+//     // call get_user() until you see '\0'
+//     ...;
+//   }
+//   return ks;
+//   // don't forget to call palloc_free_page(..) when you're done
+//   // with this page, before you return to user from syscall
+// }
 
 
