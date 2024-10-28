@@ -24,6 +24,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/*AMANDA ADDED HERE*/
+#define MAX_FILES 128
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -92,6 +95,13 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    /*AMANDA ADDED HERE*/
+    struct thread *parent;
+    bool parent_is_waiting;
+
+    struct file *files[MAX_FILES];
+    int next_file;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
