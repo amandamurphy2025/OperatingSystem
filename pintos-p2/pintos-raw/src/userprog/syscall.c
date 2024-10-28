@@ -4,6 +4,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "filesys/filesys.h"
 
 //DECLARE
 static void syscall_handler (struct intr_frame *f);
@@ -36,12 +38,14 @@ void get_args_sys_tell(struct intr_frame *f, int *args);
 void get_args_sys_close(struct intr_frame *f, int *args);
 
 /*HELPER FUNCTIONS DECLARED HERE*/
-struct file *search_file_table(int fd);
+struct file_descriptor *lookup_fd(int handle);
 int add_file_to_file_table(struct file *add_me_file);
 static void copy_in (void *dst_, const void *usrc_, size_t size);
 static char * copy_in_string (const char *us);
 static inline bool put_user (uint8_t *udst, uint8_t byte);
 static inline bool get_user (uint8_t *dst, const uint8_t *usrc);
+void close_file(int fd);
+void kill_the_table(void);
 
 typedef void (*syscall_function)(struct intr_frame *, int *);
 
@@ -138,17 +142,42 @@ static int sys_exec (const char *cmd_line){
   return 0;
 }
 
-void sys_halt (void){
-  return 0;
-}
-
-
+//use filesys_create from filesys.c. T on success, F if fail.
 bool sys_create (const char *file, unsigned initial_size){
-  return 0;
+  
+  if (file == NULL || !is_user_vaddr(file)){
+    sys_exit(-1);
+  }
+
+  char *filename = copy_in_string(file);
+  //check if null?
+
+  bool created;
+  created = filesys_create(filename, initial_size);
+
+  //free the copy_in_string thing
+  palloc_free_page(filename);
+
+  return created;
+
 }
 
+//a lot like sys_create()
 bool sys_remove (const char *file){
-  return 0;
+
+  if (file == NULL || !is_user_vaddr(file)){
+    sys_exit(-1);
+  }
+
+  char *filename = copy_in_string(file);
+  
+  bool removed;
+  removed = filesys_remove (filename);
+
+  palloc_free_page(filename);
+
+  return removed;
+
 }
 
 int sys_open (const char *file){
@@ -182,8 +211,23 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/*
+Terminates Pintos by calling shutdown_power_off() 
+(declared in devices/shutdown.h).
+*/
+void sys_halt (void) {
+  shutdown_power_off();
+}
 
-//find parent waiting or just exit
+
+/*
+Terminates the current user program, 
+returning status to the kernel. 
+If the process's parent waits for it, 
+this is the status that will be returned. 
+Conventionally, a status of 0 indicates success 
+and nonzero values indicate errors.
+*/
 void sys_exit (int status){
 
   struct thread *curr = thread_current ();
@@ -193,12 +237,8 @@ void sys_exit (int status){
 
   curr->exit_status = status;
 
-  // if (curr->parent_is_waiting){
-  //   if (curr->parent != NULL && curr->parent_is_waiting){
-
-  //   }
-  // }
-
+  //close all files and exit
+  kill_the_table();
   thread_exit();
 
 }
@@ -210,53 +250,93 @@ int sys_write (int fd, const void *buffer, unsigned size){
     sys_exit(-1);
   }
 
-  //writing to console
-  if (fd == 1){
-    //find putbuf() in console.c
-    putbuf(buffer, size);
-    return size;
+  struct file_descriptor *filedescriptor = lookup_fd(fd);
+  int sizeToWrite = size;
+  int bytes_written = 0;
+
+  while (sizeToWrite > 0){
+    int nbytes;
+
+    unsigned write_amount = sizeToWrite;
+    if (write_amount > PGSIZE){
+      write_amount = PGSIZE;
+    }
+
+    if (fd == STDOUT_FILENO){
+      putbuf(buffer, write_amount);
+      nbytes = write_amount;
+    } else {
+      nbytes = file_write(filedescriptor->file, buffer, write_amount);
+      if (nbytes < 0){
+        break;
+      }
+    }
+
+    sizeToWrite -= nbytes;
+    bytes_written += nbytes;
+    buffer += nbytes;
+
+    if (nbytes < write_amount){
+      break;
+    }
   }
 
-  // struct file *file = search_file_table(fd);
-  // if (file == NULL){
-  //   return -1;
-  // }
-
-  // //file_write() is found in file.c
-  // //tbt to networks :)
-  // int nbytes = file_write(file, buffer, size);
-
-  // return nbytes;
-  return -1;
+  return bytes_written;
 
 }
 
-struct file *search_file_table(int fd){
+//looking up function
+struct file_descriptor *lookup_fd(int handle){
+
   struct thread *curr = thread_current();
-  
-  //check if valid fd
-  if (fd < 2 || fd >= MAX_FILES || curr->files[fd] == NULL){
-    return NULL;
+
+  struct list_elem *e;
+
+  for (e=list_begin(&curr->files); e != list_end(&curr->files); e = list_next(e)){
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+
+    if (fd->handle == handle){
+      return fd;
+    }
   }
 
-  return curr->files[fd];
+  return NULL;
+
 }
 
 int add_file_to_file_table(struct file *add_me_file){
+
   struct thread *curr = thread_current();
+  struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
 
-  if (curr->next_file >= MAX_FILES){
-    return -1;
-  }
+  fd->handle = curr->next_file;
+  fd->file = add_me_file;
+  list_push_back(&curr->files, &fd->elem);
 
-  curr->files[curr->next_file] = add_me_file;
   curr->next_file += 1;
-  return curr->next_file;
+  return fd->handle;
 }
 
+void close_file(int fd){
+  struct thread *curr = thread_current();
 
+  struct file_descriptor *filedesc = lookup_fd(fd);
 
+  //find file_close() in file.c
+  file_close(filedesc->file);
+  list_remove(&filedesc->elem);
+}
 
+void kill_the_table(void){
+  struct thread *curr = thread_current();
+  struct list_elem *e;
+
+  while (!list_empty(&curr->files)){
+    e = list_pop_front(&curr->files);
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+    file_close(fd->file);
+  }
+}
 
 
 
@@ -311,10 +391,10 @@ arguments: dst, and usrc */
 static inline bool
 get_user (uint8_t *dst, const uint8_t *usrc)
 {
-int eax;
-asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
-: "=m" (*dst), "=&a" (eax) : "m" (*usrc));
-return eax != 0;
+  int eax;
+  asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
+  : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
+  return eax != 0;
 }
 
 
@@ -324,10 +404,10 @@ Returns true if successful, false if a segfault occurred. */
 static inline bool
 put_user (uint8_t *udst, uint8_t byte)
 {
-int eax;
-asm ("movl $1f, %%eax; movb %b2, %0; 1:"
-: "=m" (*udst), "=&a" (eax) : "q" (byte));
-return eax != 0;
+  int eax;
+  asm ("movl $1f, %%eax; movb %b2, %0; 1:"
+  : "=m" (*udst), "=&a" (eax) : "q" (byte));
+  return eax != 0;
 }
 
 
@@ -335,23 +415,36 @@ return eax != 0;
 page that must be **freed with palloc_free_page()**. Truncates the string
 at PGSIZE bytes in size. Call thread_exit() if any of the user accesses
 are invalid. */
-// static char *
-// copy_in_string (const char *us)
-// {
-//   char *ks;
-//   size_t length;
-//   ks = palloc_get_page (0);
-//   if (ks == NULL)
-//     thread_exit ();
-//   for (...)
-//   {
-//     ...;
-//     // call get_user() until you see '\0'
-//     ...;
-//   }
-//   return ks;
-//   // don't forget to call palloc_free_page(..) when you're done
-//   // with this page, before you return to user from syscall
-// }
+static char *
+copy_in_string (const char *us)
+{
+  char *ks;
+  size_t length = 0;
+  ks = palloc_get_page (0);
+  if (ks == NULL)
+    thread_exit ();
+
+  for (; length < PGSIZE; length++)
+  {
+    if (!get_user(&ks[length], &us[length])){
+      //memory access failed - invalid address
+      thread_exit();
+    }
+
+    // call get_user() until you see '\0'
+    if (ks[length] = '\0'){
+      break;
+    }
+  }
+
+  //truncate if too big
+  if (length >= PGSIZE){
+    ks[PGSIZE-1] = '\0';
+  }
+
+  return ks;
+  // don't forget to call palloc_free_page(..) when you're done
+  // with this page, before you return to user from syscall
+}
 
 

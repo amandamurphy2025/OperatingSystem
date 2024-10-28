@@ -101,7 +101,7 @@ struct thread
     bool parent_is_waiting;
     int exit_status;
 
-    struct file *files[MAX_FILES];
+    struct list files;
     int next_file;
 
 #ifdef USERPROG
@@ -112,6 +112,13 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+/*AMANDA ADDED HERE*/
+struct file_descriptor {
+   int handle;
+   struct file *file;
+   struct list_elem elem;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
