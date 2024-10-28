@@ -108,6 +108,10 @@ void sys_seek (int fd, unsigned position);
 unsigned sys_tell (int fd);
 void sys_close (int fd);
 
+/*HELPER FUNCTIONS DECLARED HERE*/
+struct file *search_file_table(int fd);
+int add_file_to_file_table(struct file *add_me_file);
+
 
 void
 syscall_init (void) 
@@ -132,21 +136,55 @@ void sys_exit (int status){
 
 }
 
+//might need to adjust buffer breakup in console writing/putbuf()
 int sys_write (int fd, const void *buffer, unsigned size){
   
   if (buffer == NULL || !is_user_vaddr(buffer)){
     sys_exit(-1)
   }
 
+  //writing to console
   if (fd == 1){
-    //find putbuf in console.c
+    //find putbuf() in console.c
     putbuf(buffer, size);
     return size;
   }
 
-  struct file *file = get_file(fd);
+  // struct file *file = search_file_table(fd);
+  // if (file == NULL){
+  //   return -1;
+  // }
 
+  // //file_write() is found in file.c
+  // //tbt to networks :)
+  // int nbytes = file_write(file, buffer, size);
 
+  // return nbytes;
+  return -1;
+
+}
+
+struct file *search_file_table(int fd){
+  struct thread *curr = thread_current();
+  
+  //check if valid fd
+  if (fd < 2 || fd >= MAX_FILES || curr->files[fd] == NULL){
+    return NULL;
+  }
+
+  return curr->files[fd];
+}
+
+int add_file_to_file_table(struct file *add_me_file){
+  struct thread *curr = thread_current();
+
+  if (curr->next_file >= MAX_FILES){
+    return -1;
+  }
+
+  curr->files[curr->next_file] = add_me_file;
+  curr->next_file += 1;
+  return curr->next_file;
 }
 
 
