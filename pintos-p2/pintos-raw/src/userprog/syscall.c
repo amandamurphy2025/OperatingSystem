@@ -182,12 +182,16 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+
+//find parent waiting or just exit
 void sys_exit (int status){
 
   struct thread *curr = thread_current ();
 
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
   printf("%s: exit(%d)\n", curr->name, status);
+
+  curr->exit_status = status;
 
   // if (curr->parent_is_waiting){
   //   if (curr->parent != NULL && curr->parent_is_waiting){

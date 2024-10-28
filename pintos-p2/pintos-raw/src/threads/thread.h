@@ -99,6 +99,7 @@ struct thread
     /*AMANDA ADDED HERE*/
     struct thread *parent;
     bool parent_is_waiting;
+    int exit_status;
 
     struct file *files[MAX_FILES];
     int next_file;
