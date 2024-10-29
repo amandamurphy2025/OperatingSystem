@@ -21,7 +21,7 @@ static void syscall_handler (struct intr_frame *f);
 static int sys_exec (const char *cmd_line);
 void sys_halt (void);
 void sys_exit (int status);
-// int sys_wait (pid_t pid);
+int sys_wait (tid_t pid);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
@@ -35,7 +35,7 @@ void sys_close (int fd);
 void get_args_sys_halt(struct intr_frame *f, int *args);
 void get_args_sys_exit(struct intr_frame *f, int *args);
 void get_args_sys_exec(struct intr_frame *f, int *args);
-// void get_args_sys_wait(struct intr_frame *f, int *args);
+void get_args_sys_wait(struct intr_frame *f, int *args);
 void get_args_sys_create(struct intr_frame *f, int *args);
 void get_args_sys_remove(struct intr_frame *f, int *args);
 void get_args_sys_open(struct intr_frame *f, int *args);
@@ -63,7 +63,7 @@ syscall_function table[] = {
   get_args_sys_halt,
   get_args_sys_exit,
   get_args_sys_exec,
-  // get_args_sys_wait,
+  get_args_sys_wait,
   get_args_sys_create,
   get_args_sys_remove,
   get_args_sys_open,
@@ -89,9 +89,9 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-// void get_args_sys_wait(struct intr_frame *f, int *args){
-//   f->eax = sys_wait((pid_t)args[0]);
-// }
+void get_args_sys_wait(struct intr_frame *f, int *args){
+  f->eax = sys_wait((tid_t)args[0]);
+}
 
 void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
@@ -445,44 +445,44 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
-// int sys_wait (pid_t pid) {
+int sys_wait (tid_t pid) {
 
-//   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
+  //ASK IN OH ABOUT PID/TID ERROR!!!!!!
 
-//   struct thread *curr = thread_current();
+  struct thread *curr = thread_current();
 
-//   struct list_elem *e;
-//   struct child_process *child = NULL;
+  struct list_elem *e;
+  struct child_process *child = NULL;
 
-//   for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
-//     struct child_process *child1 = list_entry(e, struct child_process, child_elem);
-//     if (child1->tid == pid){
-//       child = child1;
-//       break;
-//     }
-//   }
+  for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
+    struct child_process *child1 = list_entry(e, struct child_process, child_elem);
+    if (child1->tid == pid){
+      child = child1;
+      break;
+    }
+  }
 
-//   if (child == NULL){
-//     return -1;
-//   }
+  if (child == NULL){
+    return -1;
+  }
 
-//   if (child->someone_is_waiting_on_me){
-//     return -1;
-//   }
+  if (child->someone_is_waiting_on_me){
+    return -1;
+  }
 
-//   child->someone_is_waiting_on_me = true;
+  child->someone_is_waiting_on_me = true;
 
-//   if (!child->i_have_exited){
-//     sema_down(&child->sema_wait);
-//   }
+  if (!child->i_have_exited){
+    sema_down(&child->sema_wait);
+  }
 
-//   int status = child->exit_status;
-//   list_remove(&child->child_elem);
-//   free(child);
+  int status = child->exit_status;
+  list_remove(&child->child_elem);
+  free(child);
 
-//   return status;
+  return status;
 
-// }
+}
 
 
 

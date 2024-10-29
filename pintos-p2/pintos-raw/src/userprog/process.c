@@ -21,6 +21,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *file_name, void (**eip) (void), void **esp);
+bool baby_delivered(struct thread* parent, tid_t baby_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -43,7 +44,32 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  struct thread *curr = thread_current ();
+  if (!baby_delivered(curr, tid)){
+    palloc_free_page (fn_copy);
+    //return error?
+  }
+
+
   return tid;
+}
+
+bool baby_delivered(struct thread* parent, tid_t baby_tid){
+
+  struct child_process *baby;
+
+  baby->exit_status = -1;
+  baby->parental_figure = parent;
+  baby->i_have_exited = false;
+  baby->someone_is_waiting_on_me = false;
+  baby->tid = baby_tid;
+  sema_init(&baby->sema_wait, 0);
+
+  list_push_back(&parent->children, &baby->child_elem);
+
+  return true;
+
 }
 
 /* A thread function that loads a user process and starts it
@@ -61,6 +87,11 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  /*tell parent that the child has loaded*/
+  struct thread *curr = thread_current ();
+  curr->parent->load = success;
+  sema_up(&curr->parent->sema_load);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
