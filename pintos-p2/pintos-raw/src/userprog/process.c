@@ -498,7 +498,8 @@ setup_stack (void **esp, char *cmd)
           push(kpage, &offset, &userarg, sizeof(void **));
         }
 
-        push(kpage, &offset, NULL, sizeof(void *));
+        void *null = NULL;
+        push(kpage, &offset, &null, sizeof(void *));
         void *userargv = PHYS_BASE - PGSIZE + (argv[0] - (char *) kpage); //?
 
         // push phys base and argc
