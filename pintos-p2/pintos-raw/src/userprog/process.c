@@ -462,12 +462,10 @@ setup_stack (void **esp, char *cmd)
   }
 
   uint8_t *kpage;
-  uint8_t *userpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  userpage = palloc_get_page(PAL_USER | PAL_ZERO);
-  if (kpage != NULL && userpage != NULL) 
+  if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
@@ -494,7 +492,7 @@ setup_stack (void **esp, char *cmd)
         // push args in reverse order
         for (int i = argc - 1; i >= 0; i--)
         {
-          void *userarg = userpage + (argv[i] - (char *) kpage);
+          void *userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
           *esp = push(kpage, &offset, userarg, sizeof(void *));
         }
 
@@ -506,10 +504,7 @@ setup_stack (void **esp, char *cmd)
         
       }
       else
-      {
         palloc_free_page (kpage);
-        palloc_free_page (userpage);
-      }
     }
   return success;
 }
