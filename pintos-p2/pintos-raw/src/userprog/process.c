@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *file_name, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -196,7 +196,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *cmd);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -209,6 +209,17 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  /* separate out filename */
+  char *new_page = palloc_get_page(0);
+  if (new_page == NULL)
+    return false;
+  
+  strlcpy(new_page, file_name, PGSIZE);
+
+  char *filename;
+  char *remainder;
+  filename = strtok_r(new_page, " ", &remainder);
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -223,12 +234,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (filename);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  palloc_free_page(new_page);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -303,7 +315,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, (char *) file_name))
     goto done;
 
   /* Start address. */
@@ -425,22 +437,79 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void *
+push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size)
+{
+  size_t padsize = ROUND_UP (size, sizeof (uint32_t));
+  if (*ofs < padsize)
+    return NULL;
+
+  *ofs -= padsize;
+  memcpy (kpage + *ofs + (padsize - size), buf, size);
+  return kpage + *ofs + (padsize - size);
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *cmd) 
 {
+  /* Check command size */
+  uint32_t cmd_size = strlen(cmd);
+  if (cmd_size > PGSIZE)
+  {
+    return NULL;
+  }
+
   uint8_t *kpage;
+  uint8_t *userpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  userpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (kpage != NULL && userpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+      {  
+        *esp = PHYS_BASE;
+        size_t offset = PGSIZE;
+        
+        /* Push command line string onto stack */
+        *esp = push(kpage, &offset, cmd, cmd_size + 1);
+
+        /* Parse string */
+        char *argv[128];
+        uint8_t argc = 0;
+        char *token, *save_ptr;
+
+        for (token = strtok_r (*esp, " ", &save_ptr); 
+             token != NULL;
+             token = strtok_r (NULL, " ", &save_ptr))
+        {
+          argv[argc] = token;
+          argc++;
+        }
+
+        // push args in reverse order
+        for (int i = argc - 1; i >= 0; i--)
+        {
+          void *userarg = userpage + (argv[i] - (char *) kpage);
+          *esp = push(kpage, &offset, userarg, sizeof(void *));
+        }
+
+        // push phys base and argc
+        *esp = push(kpage, &offset, PHYS_BASE, sizeof(uint32_t));
+        *esp = push(kpage, &offset, &argc, sizeof(uint32_t));
+
+        hex_dump(*esp, *esp, 100, true);
+        
+      }
       else
+      {
         palloc_free_page (kpage);
+        palloc_free_page (userpage);
+      }
     }
   return success;
 }

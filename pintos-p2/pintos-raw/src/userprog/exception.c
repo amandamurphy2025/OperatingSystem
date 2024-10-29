@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -156,6 +157,14 @@ page_fault (struct intr_frame *f)
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
+
+   if (!user || !is_user_vaddr(fault_addr))
+   {
+      f->eip = (void (*) (void)) f->eax;
+      f->eax = 0;
+      return;
+   }
+   
   kill (f);
 }
 
