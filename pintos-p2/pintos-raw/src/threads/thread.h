@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -131,7 +133,7 @@ struct child_process {
    bool someone_is_waiting_on_me;
    struct semaphore sema_wait;
    struct list_elem child_elem;
-}
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
