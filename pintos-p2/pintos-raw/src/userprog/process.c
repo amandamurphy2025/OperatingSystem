@@ -88,7 +88,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1) {}
+  while (1) {}
   return -1;
 }
 
@@ -474,7 +474,7 @@ setup_stack (void **esp, char *cmd)
         size_t offset = PGSIZE;
         
         /* Push command line string onto stack */
-        *esp = push(kpage, &offset, cmd, cmd_size + 1);
+        push(kpage, &offset, cmd, cmd_size + 1);
 
         /* Parse string */
         char *argv[128];
@@ -492,13 +492,18 @@ setup_stack (void **esp, char *cmd)
         // push args in reverse order
         for (int i = argc - 1; i >= 0; i--)
         {
+          printf("%s\n", argv[i]);
           void *userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
-          *esp = push(kpage, &offset, userarg, sizeof(void *));
+          push(kpage, &offset, &userarg, sizeof(void **));
         }
 
+        void *userargv = PHYS_BASE - PGSIZE + (argv[0] - (char *) kpage); //?
+
         // push phys base and argc
-        *esp = push(kpage, &offset, PHYS_BASE, sizeof(uint32_t));
-        *esp = push(kpage, &offset, &argc, sizeof(uint32_t));
+        push(kpage, &offset, &argv, sizeof(uint32_t));
+        push(kpage, &offset, &argc, sizeof(uint8_t *));
+
+        *esp = PHYS_BASE - PGSIZE + offset;
 
         hex_dump(*esp, *esp, 100, true);
         

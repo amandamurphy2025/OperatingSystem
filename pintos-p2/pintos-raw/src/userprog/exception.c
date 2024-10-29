@@ -158,7 +158,7 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
 
-   if (!user || !is_user_vaddr(fault_addr))
+   if (!user)
    {
       f->eip = (void (*) (void)) f->eax;
       f->eax = 0;
