@@ -479,10 +479,10 @@ setup_stack (void **esp, char *cmd)
 
         /* Parse string */
         char *argv[128];
-        uint8_t argc = 0;
+        int argc = 0;
         char *token, *save_ptr;
 
-        for (token = strtok_r (*esp, " ", &save_ptr); 
+        for (token = strtok_r (kpage + PGSIZE - cmd_size - 1, " ", &save_ptr); 
              token != NULL;
              token = strtok_r (NULL, " ", &save_ptr))
         {
@@ -490,21 +490,22 @@ setup_stack (void **esp, char *cmd)
           argc++;
         }
 
+        void *null = NULL;
+        push(kpage, &offset, &null, sizeof(void *));
+
         // push args in reverse order
+        void *userarg;
         for (int i = argc - 1; i >= 0; i--)
         {
-          printf("%s\n", argv[i]);
-          void *userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
+          userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
           push(kpage, &offset, &userarg, sizeof(void **));
         }
 
-        void *null = NULL;
-        push(kpage, &offset, &null, sizeof(void *));
-        void *userargv = PHYS_BASE - PGSIZE + (argv[0] - (char *) kpage); //?
-
-        // push phys base and argc
-        push(kpage, &offset, &argv, sizeof(uint32_t));
-        push(kpage, &offset, &argc, sizeof(uint8_t *));
+        // push argv * and argc
+        // argv is pointed to by the stack pointer
+        void *lastarg = PHYS_BASE - PGSIZE + offset;
+        push(kpage, &offset, &lastarg, sizeof(uint32_t)); //?
+        push(kpage, &offset, &argc, sizeof(int *));
 
         *esp = PHYS_BASE - PGSIZE + offset;
 
