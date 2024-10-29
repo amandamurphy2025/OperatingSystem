@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "threads/synch.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -471,8 +472,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->children);
   t->parent = NULL;
   t->child_process = NULL;
-  sema_init(&t->sema_exit);
-  sema_init(&t->sema_load);
+  sema_init(&t->sema_exit, 0);
+  sema_init(&t->sema_load, 0);
   t->load = false;
 
 
