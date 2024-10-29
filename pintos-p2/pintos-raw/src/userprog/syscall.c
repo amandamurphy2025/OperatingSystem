@@ -6,13 +6,16 @@
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
 #include "filesys/filesys.h"
+#include "threads/synch.h"
+
+static struct lock filesys_lock;
 
 //DECLARE
 static void syscall_handler (struct intr_frame *f);
 static int sys_exec (const char *cmd_line);
 void sys_halt (void);
 void sys_exit (int status);
-// int sys_wait (pid_t pid);
+int sys_wait (pid_t pid);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
@@ -26,7 +29,7 @@ void sys_close (int fd);
 void get_args_sys_halt(struct intr_frame *f, int *args);
 void get_args_sys_exit(struct intr_frame *f, int *args);
 void get_args_sys_exec(struct intr_frame *f, int *args);
-// void get_args_sys_wait(struct intr_frame *f, int *args);
+void get_args_sys_wait(struct intr_frame *f, int *args);
 void get_args_sys_create(struct intr_frame *f, int *args);
 void get_args_sys_remove(struct intr_frame *f, int *args);
 void get_args_sys_open(struct intr_frame *f, int *args);
@@ -54,7 +57,7 @@ syscall_function table[] = {
   get_args_sys_halt,
   get_args_sys_exit,
   get_args_sys_exec,
-  // get_args_sys_wait,
+  get_args_sys_wait,
   get_args_sys_create,
   get_args_sys_remove,
   get_args_sys_open,
@@ -80,9 +83,9 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-// void get_args_sys_wait(struct intr_frame *f, int *args){
-//   f->eax = sys_wait((pid_t)args[0]);
-// }
+void get_args_sys_wait(struct intr_frame *f, int *args){
+  f->eax = sys_wait((pid_t)args[0]);
+}
 
 void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
@@ -139,7 +142,44 @@ const int arg_counts[] = {
 
 
 static int sys_exec (const char *cmd_line){
-  return 0;
+  
+  if (cmd_line == NULL || !is_user_vaddr(cmd_line)){
+    sys_exit(-1);
+  }
+
+  char *command = copy_in_string(cmd_line);
+  if (command == NULL){
+    return -1;
+  }
+
+  tid_t tid = process_execute(command);
+  palloc_free_page(command);
+
+  struct thread *curr = thread_current();
+  struct child_process *child = NULL;
+  struct list_elem *e;
+
+  //STUFF IN PROCESS HAPPENS HERE
+
+  for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
+    struct child_process *cp = list_entry(e, struct child_process, child_elem);
+    if (cp->tid == tid){
+      child=cp;
+      break;
+    }
+  }
+
+  if (child == NULL){
+    return -1;
+  }
+
+  sema_down(&curr->sema_load);
+
+  if (!curr->load){
+    return -1;
+  }
+  return tid;
+
 }
 
 //use filesys_create from filesys.c. T on success, F if fail.
@@ -150,10 +190,14 @@ bool sys_create (const char *file, unsigned initial_size){
   }
 
   char *filename = copy_in_string(file);
-  //check if null?
+  if (filename == NULL){
+    return -1;
+  }
 
   bool created;
+  lock_acquire(&filesys_lock);
   created = filesys_create(filename, initial_size);
+  lock_release(&filesys_lock);
 
   //free the copy_in_string thing
   palloc_free_page(filename);
@@ -172,7 +216,9 @@ bool sys_remove (const char *file){
   char *filename = copy_in_string(file);
   
   bool removed;
+  lock_acquire(&filesys_lock);
   removed = filesys_remove (filename);
+  lock_release(&filesys_lock);
 
   palloc_free_page(filename);
 
@@ -181,42 +227,125 @@ bool sys_remove (const char *file){
 }
 
 int sys_open (const char *file){
-  return 0;
+  //lock when grab file??????
+  if (file == NULL || !is_user_vaddr(file)){
+    sys_exit(-1);
+  }
+
+  char *filename = copy_in_string(file); 
+  if (filename == NULL){
+    return -1;
+  }
+
+  lock_acquire(&filesys_lock);
+  struct file *filereal = filesys_open(filename);
+
+  int fd = -1;
+
+  int fd = add_file_to_file_table(filereal);
+
+  lock_release(&filesys_lock);
+  palloc_free_page(filename);
+
+  return fd;
+
 }
 
 int sys_filesize (int fd){
-  return 0;
+  struct file_descriptor *filedesc = lookup_fd(fd);
+  
+  if (filedesc == NULL){
+    return -1;
+  }
+
+  //off_t?
+  int size = file_length (filedesc->file);
+
+  return size;
+
 }
 
 int sys_read (int fd, void *buffer, unsigned size){
-  return 0;
+
+  if (buffer == NULL || !is_user_vaddr(buffer)){
+    sys_exit(-1);
+  }
+
+  if (fd < 0){
+    return -1;
+  }
+
+  struct file_descriptor *filedescriptor = lookup_fd(fd);
+  
+  //return -1 if file could not be read?
+  if (filedescriptor == NULL){
+    return -1;
+  }
+
+  int sizeToRead = size;
+  int bytes_read = 0;
+
+  while (sizeToRead > 0){
+    int nbytes;
+
+    unsigned read_amount = sizeToRead;
+    if (read_amount > PGSIZE){
+      read_amount = PGSIZE;
+    }
+
+    if (fd == STDIN_FILENO){
+      nbytes = input_getc();
+    } else {
+      nbytes = file_read_at(filedescriptor->file, buffer, read_amount, bytes_read);
+      if (nbytes < 0){
+        break;
+      }
+    }
+
+    sizeToRead -= nbytes;
+    bytes_read += nbytes;
+    buffer += nbytes;
+
+    //end of file reached
+    if (nbytes < read_amount){
+      break;
+    }
+  }
+
+  return bytes_read;
+
 }
 
 void sys_seek (int fd, unsigned position){
-  return 0;
+
+  struct file_descriptor *filedescriptor = lookup_fd(fd);
+
+  if (filedescriptor == NULL){
+    return -1;
+  }
+
+  //off_t vs unsigned????
+  //child exit = sema up for later
+  //list of children for each parent?
+
+  file_seek (filedescriptor->file, position);
+
 }
 
 unsigned sys_tell (int fd){
-  return 0;
+
+  struct file_descriptor *filedescriptor = lookup_fd(fd);
+
+  int tell = file_tell (filedescriptor->file);
+
+  return tell;
+
 }
 
 void sys_close (int fd){
-  return 0;
-}
 
+  close_file(fd);
 
-void
-syscall_init (void) 
-{
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-}
-
-/*
-Terminates Pintos by calling shutdown_power_off() 
-(declared in devices/shutdown.h).
-*/
-void sys_halt (void) {
-  shutdown_power_off();
 }
 
 
@@ -235,10 +364,23 @@ void sys_exit (int status){
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
   printf("%s: exit(%d)\n", curr->name, status);
 
-  curr->exit_status = status;
+  //child_process is contained in the parents list
+  if (curr->child_process != NULL){
+    curr->child_process->exit_status = status;
+    curr->child_process->i_have_exited = true;
+    sema_up(&curr->child_process->sema_wait);
+  }
 
   //close all files and exit
   kill_the_table();
+
+  //free list
+  while (!list_empty(&curr->children)){
+    struct list_elem *e = list_pop_front(&curr->children);
+    struct child_process *child = list_entry(e, struct child_process, child_elem);
+    free(child);
+  }
+
   thread_exit();
 
 }
@@ -250,7 +392,17 @@ int sys_write (int fd, const void *buffer, unsigned size){
     sys_exit(-1);
   }
 
+  if (fd < 0){
+    return -1;
+  }
+
+
   struct file_descriptor *filedescriptor = lookup_fd(fd);
+  if (filedescriptor == NULL){
+    return -1;
+  }
+
+
   int sizeToWrite = size;
   int bytes_written = 0;
 
@@ -266,7 +418,9 @@ int sys_write (int fd, const void *buffer, unsigned size){
       putbuf(buffer, write_amount);
       nbytes = write_amount;
     } else {
+      lock_acquire(&filesys_lock);
       nbytes = file_write(filedescriptor->file, buffer, write_amount);
+      lock_release(&filesys_lock);
       if (nbytes < 0){
         break;
       }
@@ -285,62 +439,62 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
-//looking up function
-struct file_descriptor *lookup_fd(int handle){
+int sys_wait (pid_t pid) {
+
+  //ASK IN OH ABOUT PID/TID ERROR!!!!!!
 
   struct thread *curr = thread_current();
 
   struct list_elem *e;
+  struct child_process *child = NULL;
 
-  for (e=list_begin(&curr->files); e != list_end(&curr->files); e = list_next(e)){
-    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
-
-    if (fd->handle == handle){
-      return fd;
+  for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
+    struct child_process *child1 = list_entry(e, struct child_process, child_elem);
+    if (child1->tid == pid){
+      child = child1;
+      break;
     }
   }
 
-  return NULL;
-
-}
-
-int add_file_to_file_table(struct file *add_me_file){
-
-  struct thread *curr = thread_current();
-  struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
-
-  fd->handle = curr->next_file;
-  fd->file = add_me_file;
-  list_push_back(&curr->files, &fd->elem);
-
-  curr->next_file += 1;
-  return fd->handle;
-}
-
-void close_file(int fd){
-  struct thread *curr = thread_current();
-
-  struct file_descriptor *filedesc = lookup_fd(fd);
-
-  //find file_close() in file.c
-  file_close(filedesc->file);
-  list_remove(&filedesc->elem);
-}
-
-void kill_the_table(void){
-  struct thread *curr = thread_current();
-  struct list_elem *e;
-
-  while (!list_empty(&curr->files)){
-    e = list_pop_front(&curr->files);
-    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
-    file_close(fd->file);
+  if (child == NULL){
+    return -1;
   }
+
+  if (child->someone_is_waiting_on_me){
+    return -1;
+  }
+
+  child->someone_is_waiting_on_me = true;
+
+  if (!child->i_have_exited){
+    sema_down(&child->sema_wait);
+  }
+
+  int status = child->exit_status;
+  list_remove(&child->child_elem);
+  free(child);
+
+  return status;
+
 }
 
 
 
+void
+syscall_init (void) 
+{
+  lock_init(&filesys_lock);
 
+  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+}
+
+/*
+Terminates Pintos by calling shutdown_power_off() 
+(declared in devices/shutdown.h).
+*/
+void sys_halt (void) {
+  shutdown_power_off();
+}
 
 
 static void
@@ -426,13 +580,14 @@ copy_in_string (const char *us)
 
   for (; length < PGSIZE; length++)
   {
+    //might need to cast types here
     if (!get_user(&ks[length], &us[length])){
       //memory access failed - invalid address
       thread_exit();
     }
 
     // call get_user() until you see '\0'
-    if (ks[length] = '\0'){
+    if (ks[length] == '\0'){
       break;
     }
   }
@@ -445,6 +600,61 @@ copy_in_string (const char *us)
   return ks;
   // don't forget to call palloc_free_page(..) when you're done
   // with this page, before you return to user from syscall
+}
+
+//looking up function
+struct file_descriptor *lookup_fd(int handle){
+
+  struct thread *curr = thread_current();
+
+  struct list_elem *e;
+
+  for (e=list_begin(&curr->files); e != list_end(&curr->files); e = list_next(e)){
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+
+    if (fd->handle == handle){
+      return fd;
+    }
+  }
+
+  return NULL;
+
+}
+
+int add_file_to_file_table(struct file *add_me_file){
+
+  struct thread *curr = thread_current();
+  struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
+
+  //should this loop through fd numbers to find the next available or is setting the next enough?
+  fd->handle = curr->next_file;
+  fd->file = add_me_file;
+  list_push_back(&curr->files, &fd->elem);
+
+  curr->next_file += 1;
+  return fd->handle;
+}
+
+void close_file(int fd){
+
+  struct file_descriptor *filedesc = lookup_fd(fd);
+
+  //find file_close() in file.c
+  file_close(filedesc->file);
+  list_remove(&filedesc->elem);
+
+  free(filedesc);
+}
+
+void kill_the_table(void){
+  struct thread *curr = thread_current();
+  struct list_elem *e;
+
+  while (!list_empty(&curr->files)){
+    e = list_pop_front(&curr->files);
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+    file_close(fd->file);
+  }
 }
 
 

@@ -468,6 +468,13 @@ init_thread (struct thread *t, const char *name, int priority)
   //should we allocate page for file table?
   t->next_file = 2;
   list_init(&t->files);
+  list_init(&t->children);
+  t->parent = NULL;
+  t->child_process = NULL;
+  sema_init(&t->sema_exit);
+  sema_init(&t->sema_load);
+  t->load = false;
+
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

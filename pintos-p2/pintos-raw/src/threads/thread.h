@@ -98,8 +98,12 @@ struct thread
 
     /*AMANDA ADDED HERE*/
     struct thread *parent;
-    bool parent_is_waiting;
-    int exit_status;
+    struct list children;
+    struct child_process *child_process;
+
+    struct semaphore sema_exit;
+    bool load;
+    struct semaphore sema_load;
 
     struct list files;
     int next_file;
@@ -119,6 +123,15 @@ struct file_descriptor {
    struct file *file;
    struct list_elem elem;
 };
+
+struct child_process {
+   tid_t tid;
+   int exit_status;
+   bool i_have_exited;
+   bool someone_is_waiting_on_me;
+   struct semaphore sema_wait;
+   struct list_elem child_elem;
+}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
