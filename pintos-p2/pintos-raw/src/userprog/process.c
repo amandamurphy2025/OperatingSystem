@@ -18,7 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *file_name, void (**eip) (void), void **esp);
 
@@ -27,20 +26,30 @@ static bool load (const char *file_name, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd_line) 
 {
   char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of cmd_line.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd_line, PGSIZE);
+
+  char *new_page = palloc_get_page(0);
+  if (new_page == NULL)
+    return false;
+  
+  strlcpy(new_page, cmd_line, PGSIZE);
+
+  char *filename;
+  char *remainder;
+  filename = strtok_r(new_page, " ", &remainder);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (filename, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -49,9 +58,9 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *cmd_line_)
 {
-  char *file_name = file_name_;
+  char *cmd_line = cmd_line_;
   struct intr_frame if_;
   bool success;
 
@@ -60,10 +69,10 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (cmd_line, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page (cmd_line);
   if (!success) 
     thread_exit ();
 
@@ -87,10 +96,18 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while (1) {}
-  return -1;
+  struct thread *child = get_thread_by_tid(child_tid);
+  if (child == NULL || child->process_waiting)
+  {
+    return -1;
+  }
+
+  child->process_waiting = true;
+  sema_down(&child->parent_sema);
+
+  return 0;
 }
 
 /* Free the current process's resources. */
@@ -208,14 +225,14 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *cmd_line, void (**eip) (void), void **esp) 
 {
   /* separate out filename */
   char *new_page = palloc_get_page(0);
   if (new_page == NULL)
     return false;
   
-  strlcpy(new_page, file_name, PGSIZE);
+  strlcpy(new_page, cmd_line, PGSIZE);
 
   char *filename;
   char *remainder;
@@ -238,7 +255,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (filename);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", filename);
       goto done; 
     }
   palloc_free_page(new_page);
@@ -252,7 +269,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", filename);
       goto done; 
     }
 
@@ -316,7 +333,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, (char *) file_name))
+  if (!setup_stack (esp, (char *) cmd_line))
     goto done;
 
   /* Start address. */
@@ -498,19 +515,19 @@ setup_stack (void **esp, char *cmd)
         for (int i = argc - 1; i >= 0; i--)
         {
           userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
-          push(kpage, &offset, &userarg, sizeof(void **));
+          push(kpage, &offset, &userarg, sizeof(void *));
         }
 
         // push argv * and argc
         // argv is pointed to by the stack pointer
         void *lastarg = PHYS_BASE - PGSIZE + offset;
         push(kpage, &offset, &lastarg, sizeof(uint32_t)); //?
-        push(kpage, &offset, &argc, sizeof(int *));
+        push(kpage, &offset, &argc, sizeof(int));
+        push(kpage, &offset, &null, sizeof(void *));
 
-        *esp = PHYS_BASE - PGSIZE + offset;
+        *esp = PHYS_BASE - PGSIZE + offset;     
 
-        hex_dump(*esp, *esp, 100, true);
-        
+        //hex_dump(*esp, *esp, 100, true);   
       }
       else
         palloc_free_page (kpage);

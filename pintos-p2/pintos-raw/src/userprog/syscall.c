@@ -35,7 +35,7 @@ void sys_close (int fd);
 void get_args_sys_halt(struct intr_frame *f, int *args);
 void get_args_sys_exit(struct intr_frame *f, int *args);
 void get_args_sys_exec(struct intr_frame *f, int *args);
-// void get_args_sys_wait(struct intr_frame *f, int *args);
+void get_args_sys_wait(struct intr_frame *f, int *args);
 void get_args_sys_create(struct intr_frame *f, int *args);
 void get_args_sys_remove(struct intr_frame *f, int *args);
 void get_args_sys_open(struct intr_frame *f, int *args);
@@ -63,7 +63,7 @@ syscall_function table[] = {
   get_args_sys_halt,
   get_args_sys_exit,
   get_args_sys_exec,
-  // get_args_sys_wait,
+  get_args_sys_wait,
   get_args_sys_create,
   get_args_sys_remove,
   get_args_sys_open,
@@ -89,9 +89,9 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-// void get_args_sys_wait(struct intr_frame *f, int *args){
-//   f->eax = sys_wait((pid_t)args[0]);
-// }
+void get_args_sys_wait(struct intr_frame *f, int *args){
+   f->eax = sys_wait((tid_t)args[0]);
+}
 
 void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
@@ -364,7 +364,6 @@ Conventionally, a status of 0 indicates success
 and nonzero values indicate errors.
 */
 void sys_exit (int status){
-
   struct thread *curr = thread_current ();
 
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
@@ -393,7 +392,6 @@ void sys_exit (int status){
 
 //might need to adjust buffer breakup in console writing/putbuf()
 int sys_write (int fd, const void *buffer, unsigned size){
-  
   if (buffer == NULL || !is_user_vaddr(buffer)){
     sys_exit(-1);
   }
@@ -404,7 +402,7 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 
   struct file_descriptor *filedescriptor = lookup_fd(fd);
-  if (filedescriptor == NULL){
+  if (filedescriptor == NULL && fd != STDOUT_FILENO) {
     return -1;
   }
 
@@ -445,6 +443,9 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
+int sys_wait(tid_t t) {
+  printf("syswait\n");
+}
 // int sys_wait (pid_t pid) {
 
 //   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
