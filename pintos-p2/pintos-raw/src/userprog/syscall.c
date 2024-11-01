@@ -386,6 +386,7 @@ void sys_exit (int status){
     free(child);
   }
 
+  curr->exit_code = status;
   thread_exit();
 
 }

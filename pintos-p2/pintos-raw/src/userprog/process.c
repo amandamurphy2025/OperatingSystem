@@ -98,7 +98,7 @@ start_process (void *cmd_line_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *child = get_thread_by_tid(child_tid);
+  struct thread *child = get_child_thread_by_tid(thread_current(), child_tid);
   if (child == NULL || child->process_waiting)
   {
     return -1;
@@ -107,7 +107,7 @@ process_wait (tid_t child_tid)
   child->process_waiting = true;
   sema_down(&child->parent_sema);
 
-  return 0;
+  return child->exit_code;
 }
 
 /* Free the current process's resources. */
