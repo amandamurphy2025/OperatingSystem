@@ -21,7 +21,7 @@ static void syscall_handler (struct intr_frame *f);
 static int sys_exec (const char *cmd_line);
 void sys_halt (void);
 void sys_exit (int status);
-// int sys_wait (pid_t pid);
+int sys_wait (pid_t pid);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
@@ -89,9 +89,9 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-// void get_args_sys_wait(struct intr_frame *f, int *args){
-//    f->eax = sys_wait((tid_t)args[0]);
-// }
+void get_args_sys_wait(struct intr_frame *f, int *args){
+   f->eax = sys_wait((tid_t)args[0]);
+}
 
 void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
@@ -441,9 +441,9 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
-// int sys_wait(tid_t t) {
-//   printf("syswait\n");
-// }
+int sys_wait(tid_t t) {
+  printf("syswait\n");
+}
 // int sys_wait (pid_t pid) {
 
 //   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
