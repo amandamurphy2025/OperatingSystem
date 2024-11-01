@@ -355,6 +355,10 @@ unsigned sys_tell (int fd){
 
 void sys_close (int fd){
 
+  if (fd == STDIN_FILENO || fd == STDOUT_FILENO){
+    return -1;
+  }
+
   close_file(fd);
 
 }
@@ -648,6 +652,10 @@ int add_file_to_file_table(struct file *add_me_file){
 void close_file(int fd){
 
   struct file_descriptor *filedesc = lookup_fd(fd);
+
+  if (filedesc == NULL){
+    return -1;
+  }
 
   //find file_close() in file.c
   file_close(filedesc->file);
