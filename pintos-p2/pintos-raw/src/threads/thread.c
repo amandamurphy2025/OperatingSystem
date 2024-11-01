@@ -597,7 +597,7 @@ allocate_tid (void)
 }
 
 /* Get thread by tid */
-struct thread *get_thread_by_tid(tid_t tid)
+struct thread *get_child_thread_by_tid(struct thread *t, tid_t tid)
 {
   struct list_elem *e;
   // disable interrupts 

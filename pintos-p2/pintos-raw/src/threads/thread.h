@@ -103,16 +103,17 @@ struct thread
     struct list children;
     struct child_process *child_process;
 
-    /* Chris added here */
-    struct semaphore parent_sema;
-    bool process_waiting;
-
     struct semaphore sema_exit;
     bool load;
     struct semaphore sema_load;
 
     struct list files;
     int next_file;
+
+    /* Chris added here */
+    struct semaphore parent_sema;
+    bool process_waiting;
+    int exit_code;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -138,9 +139,6 @@ struct child_process {
    struct semaphore sema_wait;
    struct list_elem child_elem;
 };
-
-/* Chris added here */
-struct condition parent_cond;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

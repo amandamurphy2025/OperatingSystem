@@ -165,6 +165,7 @@ page_fault (struct intr_frame *f)
       return;
    }
    
+  printf("killing f");
   kill (f);
 }
 
