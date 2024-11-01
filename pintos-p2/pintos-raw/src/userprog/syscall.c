@@ -89,9 +89,9 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
   f->eax = sys_exec((const char *)args[0]);
 }
 
-void get_args_sys_wait(struct intr_frame *f, int *args){
-   f->eax = sys_wait((tid_t)args[0]);
-}
+// void get_args_sys_wait(struct intr_frame *f, int *args){
+//    f->eax = sys_wait((tid_t)args[0]);
+// }
 
 void get_args_sys_create(struct intr_frame *f, int *args){
   f->eax = sys_create((const char *)args[0], (unsigned)args[1]);
@@ -380,7 +380,7 @@ void sys_exit (int status){
   while (!list_empty(&curr->children)){
     struct list_elem *e = list_pop_front(&curr->children);
     struct child_process *child = list_entry(e, struct child_process, child_elem);
-    free(child);
+    palloc_free_page(child);
   }
 
   curr->exit_code = status;
@@ -441,9 +441,9 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
-int sys_wait(tid_t t) {
-  printf("syswait\n");
-}
+// int sys_wait(tid_t t) {
+//   printf("syswait\n");
+// }
 // int sys_wait (pid_t pid) {
 
 //   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
@@ -586,7 +586,7 @@ copy_in_string (const char *us)
   for (; length < PGSIZE; length++)
   {
     //might need to cast types here
-    if (!get_user(&ks[length], &us[length])){
+    if (!get_user((uint8_t *)&ks[length], (uint8_t *)&us[length])){
       //memory access failed - invalid address
       thread_exit();
     }
@@ -629,7 +629,7 @@ struct file_descriptor *lookup_fd(int handle){
 int add_file_to_file_table(struct file *add_me_file){
 
   struct thread *curr = thread_current();
-  struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
+  struct file_descriptor *fd = palloc_get_page(sizeof(struct file_descriptor));
 
   //should this loop through fd numbers to find the next available or is setting the next enough?
   fd->handle = curr->next_file;
@@ -648,7 +648,7 @@ void close_file(int fd){
   file_close(filedesc->file);
   list_remove(&filedesc->elem);
 
-  free(filedesc);
+  palloc_free_page(filedesc);
 }
 
 void kill_the_table(void){
