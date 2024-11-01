@@ -21,7 +21,7 @@ static void syscall_handler (struct intr_frame *f);
 static int sys_exec (const char *cmd_line);
 void sys_halt (void);
 void sys_exit (int status);
-int sys_wait (pid_t pid);
+int sys_wait (tid_t pid);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
