@@ -133,6 +133,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  
+  //thread_name() defined in thread.h, termination message defined in pintos_3.html
+  printf("%s: exit(%d)\n", cur->name, cur->exit_code);
 }
 
 /* Sets up the CPU for running user code in the current

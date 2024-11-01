@@ -366,9 +366,6 @@ and nonzero values indicate errors.
 void sys_exit (int status){
   struct thread *curr = thread_current ();
 
-  //thread_name() defined in thread.h, termination message defined in pintos_3.html
-  printf("%s: exit(%d)\n", curr->name, status);
-
   //child_process is contained in the parents list
   if (curr->child_process != NULL){
     curr->child_process->exit_status = status;

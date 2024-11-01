@@ -480,6 +480,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Chris added here */
   sema_init(&t->parent_sema, 0);
   t->process_waiting = false;
+  t->exit_code = -1;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
