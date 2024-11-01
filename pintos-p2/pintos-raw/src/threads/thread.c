@@ -292,6 +292,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  sema_up(&thread_current()->parent_sema);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -476,6 +477,9 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->sema_load, 0);
   t->load = false;
 
+  /* Chris added here */
+  sema_init(&t->parent_sema, 0);
+  t->process_waiting = false;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -591,6 +595,28 @@ allocate_tid (void)
 
   return tid;
 }
+
+/* Get thread by tid */
+struct thread *get_child_thread_by_tid(struct thread *t, tid_t tid)
+{
+  struct list_elem *e;
+  // disable interrupts 
+  enum intr_level old_level = intr_disable();
+
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+  {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if(t->tid == tid)
+    {
+      intr_set_level(old_level);
+      return t;
+    }
+  }
+
+  intr_set_level(old_level);
+  return NULL;
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

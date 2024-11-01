@@ -90,7 +90,11 @@ void get_args_sys_exec(struct intr_frame *f, int *args){
 }
 
 void get_args_sys_wait(struct intr_frame *f, int *args){
+<<<<<<< HEAD
   f->eax = sys_wait((tid_t)args[0]);
+=======
+   f->eax = sys_wait((tid_t)args[0]);
+>>>>>>> 091fd7bdab0ce09eac9eaed5a120307995337d77
 }
 
 void get_args_sys_create(struct intr_frame *f, int *args){
@@ -364,7 +368,6 @@ Conventionally, a status of 0 indicates success
 and nonzero values indicate errors.
 */
 void sys_exit (int status){
-
   struct thread *curr = thread_current ();
 
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
@@ -387,13 +390,13 @@ void sys_exit (int status){
     free(child);
   }
 
+  curr->exit_code = status;
   thread_exit();
 
 }
 
 //might need to adjust buffer breakup in console writing/putbuf()
 int sys_write (int fd, const void *buffer, unsigned size){
-  
   if (buffer == NULL || !is_user_vaddr(buffer)){
     sys_exit(-1);
   }
@@ -404,7 +407,7 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 
   struct file_descriptor *filedescriptor = lookup_fd(fd);
-  if (filedescriptor == NULL){
+  if (filedescriptor == NULL && fd != STDOUT_FILENO) {
     return -1;
   }
 
@@ -445,7 +448,14 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
 }
 
+<<<<<<< HEAD
 int sys_wait (tid_t pid) {
+=======
+int sys_wait(tid_t t) {
+  printf("syswait\n");
+}
+// int sys_wait (pid_t pid) {
+>>>>>>> 091fd7bdab0ce09eac9eaed5a120307995337d77
 
   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
 

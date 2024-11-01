@@ -110,6 +110,11 @@ struct thread
     struct list files;
     int next_file;
 
+    /* Chris added here */
+    struct semaphore parent_sema;
+    bool process_waiting;
+    int exit_code;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -170,5 +175,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+struct thread *get_thread_by_tid(tid_t tid);
 
 #endif /* threads/thread.h */
