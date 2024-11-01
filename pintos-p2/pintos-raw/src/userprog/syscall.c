@@ -12,6 +12,7 @@
 #include "userprog/process.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "userprog/exception.h"
 
 
 static struct lock filesys_lock;
@@ -245,6 +246,10 @@ int sys_open (const char *file){
 
   lock_acquire(&filesys_lock);
   struct file *filereal = filesys_open(filename);
+
+  if (filereal == NULL){
+    return -1;
+  }
 
   //int fd = -1;
 
