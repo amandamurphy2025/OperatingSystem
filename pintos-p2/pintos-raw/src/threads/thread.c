@@ -306,15 +306,15 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+#ifdef USERPROG
+  process_exit ();
+#endif
+
   struct thread *curr = thread_current ();
   if (curr->child_process != NULL){
     curr->child_process->i_have_exited = true;
     sema_up(&curr->child_process->sema_wait);
   }
-
-#ifdef USERPROG
-  process_exit ();
-#endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
