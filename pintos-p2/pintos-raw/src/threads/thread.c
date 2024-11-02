@@ -71,6 +71,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+struct child_process *add_child(tid_t tid);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -199,10 +200,30 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  //Set the Parent Thread
+  t->parent = thread_current ();
+  t->child_process = add_child(tid);
+
   /* Add to run queue. */
   thread_unblock (t);
 
   return tid;
+}
+
+struct child_process *add_child(tid_t tid){
+
+  struct child_process *cp = palloc_get_page(0);
+
+  cp->tid = tid;
+  cp->exit_status = 0;
+  cp->i_have_exited = false;
+  cp->load = false;
+  cp->someone_is_waiting_on_me = false;
+  sema_init(&cp->sema_wait, 0);
+  sema_init(&cp->sema_load, 0);
+
+  list_push_back(&thread_current ()->children, &cp->child_elem);
+  
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -292,7 +313,13 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  sema_up(&thread_current()->parent_sema);
+
+  struct thread *curr = thread_current ();
+  if (curr->child_process != NULL){
+    curr->child_process->i_have_exited = true;
+    sema_up(&curr->child_process->sema_wait);
+  }
+
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -467,20 +494,21 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   //AMANDA ADDED HERE
-  //should we allocate page for file table?
   t->next_file = 2;
   list_init(&t->files);
   list_init(&t->children);
+
   t->parent = NULL;
   t->child_process = NULL;
-  sema_init(&t->sema_exit, 0);
-  sema_init(&t->sema_load, 0);
-  t->load = false;
+  t->exit_code = -1;
+  // sema_init(&t->sema_exit, 0);
+  // sema_init(&t->sema_load, 0);
+  // t->load = false;
 
   /* Chris added here */
-  sema_init(&t->parent_sema, 0);
-  t->process_waiting = false;
-  t->exit_code = -1;
+  // sema_init(&t->parent_sema, 0);
+  // t->process_waiting = false;
+  // t->exit_code = -1;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

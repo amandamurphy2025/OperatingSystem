@@ -49,6 +49,7 @@ process_execute (const char *cmd_line)
   filename = strtok_r(new_page, " ", &remainder);
 
   /* Create a new thread to execute FILE_NAME. */
+  //all parent child stuff is done in thread_create
   tid = thread_create (filename, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -64,6 +65,20 @@ start_process (void *cmd_line_)
   struct intr_frame if_;
   bool success;
 
+  struct thread *curr = thread_current();
+  struct thread *parent = curr->parent;
+
+  struct child_process *child = NULL;
+  struct list_elem *e;
+
+  for (e = list_begin(&parent->children) ; e != list_end(&parent->children) ; e = list_next(e)){
+    struct child_process *cp = list_entry(e, struct child_process, child_elem);
+    if (cp->tid == curr->tid){
+      child = cp;
+      break;
+    }
+  }
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -73,6 +88,13 @@ start_process (void *cmd_line_)
 
   /* If load failed, quit. */
   palloc_free_page (cmd_line);
+
+  //let the parent know if the loading was successful
+  if (child != NULL) {
+    child->load = success;
+    sema_up(&child->sema_load);
+  }
+
   if (!success) 
     thread_exit ();
 
@@ -98,16 +120,39 @@ start_process (void *cmd_line_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *child = get_child_thread_by_tid(thread_current(), child_tid);
-  if (child == NULL || child->process_waiting)
-  {
+
+  struct thread *curr = thread_current();
+  struct list_elem *e;
+  struct child_process *cp = NULL;
+
+  for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
+    struct child_process *child = list_entry(e, struct child_process, child_elem);
+    if (child->tid == child_tid){
+      cp=child;
+      break;
+    }
+  }
+
+  if (cp == NULL){
     return -1;
   }
 
-  child->process_waiting = true;
-  sema_down(&child->parent_sema);
+  if (cp->someone_is_waiting_on_me){
+    return -1;
+  }
 
-  return child->exit_code;
+  cp->someone_is_waiting_on_me = true;
+
+  if (!cp->i_have_exited){
+    sema_down(&cp->sema_wait);
+  }
+
+  int status = cp->exit_status;
+  list_remove(&cp->child_elem);
+  palloc_free_page(cp);
+
+  return status;
+
 }
 
 /* Free the current process's resources. */

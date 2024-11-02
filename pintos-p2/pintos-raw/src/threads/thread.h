@@ -103,16 +103,16 @@ struct thread
     struct list children;
     struct child_process *child_process;
 
-    struct semaphore sema_exit;
-    bool load;
-    struct semaphore sema_load;
+   //  struct semaphore sema_exit;
+   //  bool load;
+   //  struct semaphore sema_load;
 
     struct list files;
     int next_file;
 
     /* Chris added here */
-    struct semaphore parent_sema;
-    bool process_waiting;
+   //  struct semaphore parent_sema;
+   //  bool process_waiting;
     int exit_code;
 
 #ifdef USERPROG
@@ -135,8 +135,10 @@ struct child_process {
    tid_t tid;
    int exit_status;
    bool i_have_exited;
+   bool load;
    bool someone_is_waiting_on_me;
    struct semaphore sema_wait;
+   struct semaphore sema_load;
    struct list_elem child_elem;
 };
 

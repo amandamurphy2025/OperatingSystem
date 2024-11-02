@@ -13,6 +13,7 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "userprog/exception.h"
+#include "userprog/pagedir.h"
 
 
 static struct lock filesys_lock;
@@ -159,15 +160,19 @@ static int sys_exec (const char *cmd_line){
     return -1;
   }
 
+  //call process execute
   tid_t tid = process_execute(command);
   palloc_free_page(command);
+
+  if (tid == TID_ERROR){
+    return -1;
+  }
 
   struct thread *curr = thread_current();
   struct child_process *child = NULL;
   struct list_elem *e;
 
-  //STUFF IN PROCESS HAPPENS HERE
-
+  //find child to check for Load condition
   for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
     struct child_process *cp = list_entry(e, struct child_process, child_elem);
     if (cp->tid == tid){
@@ -180,9 +185,10 @@ static int sys_exec (const char *cmd_line){
     return -1;
   }
 
-  sema_down(&curr->sema_load);
+  //check loading status
+  sema_down(&child->sema_load);
 
-  if (!curr->load){
+  if (!child->load){
     return -1;
   }
   return tid;
@@ -374,32 +380,35 @@ and nonzero values indicate errors.
 */
 void sys_exit (int status){
   struct thread *curr = thread_current ();
-
-  //child_process is contained in the parents list
   if (curr->child_process != NULL){
     curr->child_process->exit_status = status;
-    curr->child_process->i_have_exited = true;
-    sema_up(&curr->child_process->sema_wait);
-  }
-
-  //close all files and exit
-  kill_the_table();
-
-  //free list
-  while (!list_empty(&curr->children)){
-    struct list_elem *e = list_pop_front(&curr->children);
-    struct child_process *child = list_entry(e, struct child_process, child_elem);
-    palloc_free_page(child);
-  }
-
-  curr->exit_code = status;
   thread_exit();
+  }
+
+  //child_process is contained in the parents list
+  // if (curr->child_process != NULL){
+  //   curr->child_process->exit_status = status;
+  //   curr->child_process->i_have_exited = true;
+  //   sema_up(&curr->child_process->sema_wait);
+  // }
+
+  // //close all files and exit
+  // kill_the_table();
+
+  // //free list
+  // while (!list_empty(&curr->children)){
+  //   struct list_elem *e = list_pop_front(&curr->children);
+  //   struct child_process *child = list_entry(e, struct child_process, child_elem);
+  //   palloc_free_page(child);
+  // }
+
+  // thread_exit();
 
 }
 
 //might need to adjust buffer breakup in console writing/putbuf()
 int sys_write (int fd, const void *buffer, unsigned size){
-  if (buffer == NULL || !is_user_vaddr(buffer)){
+  if (buffer == NULL || !pagedir_get_page(thread_current()->pagedir, buffer)){
     sys_exit(-1);
   }
 
@@ -451,7 +460,11 @@ int sys_write (int fd, const void *buffer, unsigned size){
 }
 
 int sys_wait(tid_t t) {
-  printf("syswait\n");
+  
+  int ret = process_wait (t);
+
+  return ret;
+
 }
 // int sys_wait (pid_t pid) {
 
