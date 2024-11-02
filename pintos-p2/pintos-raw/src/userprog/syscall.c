@@ -13,6 +13,7 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "userprog/exception.h"
+#include "userprog/pagedir.h"
 
 
 static struct lock filesys_lock;
@@ -399,7 +400,7 @@ void sys_exit (int status){
 
 //might need to adjust buffer breakup in console writing/putbuf()
 int sys_write (int fd, const void *buffer, unsigned size){
-  if (buffer == NULL || !is_user_vaddr(buffer)){
+  if (buffer == NULL || !pagedir_get_page(thread_current()->pagedir, buffer)){
     sys_exit(-1);
   }
 
