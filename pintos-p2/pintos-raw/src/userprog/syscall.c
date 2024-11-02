@@ -257,8 +257,6 @@ int sys_open (const char *file){
     return -1;
   }
 
-  //int fd = -1;
-
   int fd = add_file_to_file_table(filereal);
 
   lock_release(&filesys_lock);
@@ -350,10 +348,6 @@ void sys_seek (int fd, unsigned position){
     return;
   }
 
-  //off_t vs unsigned????
-  //child exit = sema up for later
-  //list of children for each parent?
-
   file_seek (filedescriptor->file, position);
 
 }
@@ -393,26 +387,6 @@ void sys_exit (int status){
     curr->child_process->exit_status = status;
   }
   thread_exit();
-
-  //child_process is contained in the parents list
-  // if (curr->child_process != NULL){
-  //   curr->child_process->exit_status = status;
-  //   curr->child_process->i_have_exited = true;
-  //   sema_up(&curr->child_process->sema_wait);
-  // }
-
-  // //close all files and exit
-  // kill_the_table();
-
-  // //free list
-  // while (!list_empty(&curr->children)){
-  //   struct list_elem *e = list_pop_front(&curr->children);
-  //   struct child_process *child = list_entry(e, struct child_process, child_elem);
-  //   palloc_free_page(child);
-  // }
-
-  // thread_exit();
-
 }
 
 //might need to adjust buffer breakup in console writing/putbuf()
@@ -485,46 +459,6 @@ int sys_wait(tid_t t) {
   return ret;
 
 }
-// int sys_wait (pid_t pid) {
-
-//   //ASK IN OH ABOUT PID/TID ERROR!!!!!!
-
-//   struct thread *curr = thread_current();
-
-//   struct list_elem *e;
-//   struct child_process *child = NULL;
-
-//   for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
-//     struct child_process *child1 = list_entry(e, struct child_process, child_elem);
-//     if (child1->tid == pid){
-//       child = child1;
-//       break;
-//     }
-//   }
-
-//   if (child == NULL){
-//     return -1;
-//   }
-
-//   if (child->someone_is_waiting_on_me){
-//     return -1;
-//   }
-
-//   child->someone_is_waiting_on_me = true;
-
-//   if (!child->i_have_exited){
-//     sema_down(&child->sema_wait);
-//   }
-
-//   int status = child->exit_status;
-//   list_remove(&child->child_elem);
-//   free(child);
-
-//   return status;
-
-// }
-
-
 
 void
 syscall_init (void) 
