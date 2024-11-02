@@ -303,7 +303,7 @@ int sys_read (int fd, void *buffer, unsigned size){
   int bytes_read = 0;
 
   while (sizeToRead > 0){
-    int nbytes;
+    unsigned nbytes;
 
     unsigned read_amount = sizeToRead;
     if (read_amount > PGSIZE){
@@ -311,12 +311,17 @@ int sys_read (int fd, void *buffer, unsigned size){
     }
 
     if (fd == STDIN_FILENO){
-      nbytes = input_getc();
-    } else {
-      nbytes = file_read_at(filedescriptor->file, buffer, read_amount, bytes_read);
-      if (nbytes < 0){
+      int tmp = input_getc();
+      if (tmp < 0){
         break;
       }
+      nbytes = (unsigned)tmp;
+    } else {
+      int tmp = file_read_at(filedescriptor->file, buffer, read_amount, bytes_read);
+      if (tmp < 0){
+        break;
+      }
+      nbytes = (unsigned)tmp;
     }
 
     sizeToRead -= nbytes;
@@ -427,7 +432,7 @@ int sys_write (int fd, const void *buffer, unsigned size){
   int bytes_written = 0;
 
   while (sizeToWrite > 0){
-    int nbytes;
+    unsigned nbytes;
 
     unsigned write_amount = sizeToWrite;
     if (write_amount > PGSIZE){
@@ -436,14 +441,19 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
     if (fd == STDOUT_FILENO){
       putbuf(buffer, write_amount);
-      nbytes = write_amount;
-    } else {
-      lock_acquire(&filesys_lock);
-      nbytes = file_write(filedescriptor->file, buffer, write_amount);
-      lock_release(&filesys_lock);
-      if (nbytes < 0){
+      int tmp = write_amount;
+      if (tmp < 0){
         break;
       }
+      nbytes = (unsigned)tmp;
+    } else {
+      lock_acquire(&filesys_lock);
+      int tmp = file_write(filedescriptor->file, buffer, write_amount);
+      lock_release(&filesys_lock);
+      if (tmp < 0){
+        break;
+      }
+      nbytes = (unsigned)tmp;
     }
 
     sizeToWrite -= nbytes;
