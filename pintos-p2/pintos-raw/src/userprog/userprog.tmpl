@@ -133,7 +133,9 @@ struct thread
 	file I added into the file list (its like the handle/fd int that gets passed in a lot of functions).
 	The file list is a list of file_descriptor structs (defined below) that is all the open files.
 
-	We also added the executable file....
+	We also added the executable file. We use this to keep the file handle open while we are executing the program
+	This is generally useful in case a program needs to fetch more code or any other data from the executable. However,
+	this also has the advantage of allowing us to deny writes while executing.
 
 /*AMANDA ADDED HERE*/
 struct file_descriptor {
