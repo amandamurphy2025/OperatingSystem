@@ -173,6 +173,7 @@ static int sys_exec (const char *cmd_line){
   struct list_elem *e;
 
   //find child to check for Load condition
+  //find child with matching tid
   for (e=list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){
     struct child_process *cp = list_entry(e, struct child_process, child_elem);
     if (cp->tid == tid){
@@ -560,7 +561,7 @@ copy_in_string (const char *us)
 
   for (; length < PGSIZE; length++)
   {
-    //might need to cast types here
+    //might need to cast types here - yes we did
     if (!get_user((uint8_t *)&ks[length], (uint8_t *)&us[length])){
       //memory access failed - invalid address
       thread_exit();
@@ -580,6 +581,7 @@ copy_in_string (const char *us)
   return ks;
   // don't forget to call palloc_free_page(..) when you're done
   // with this page, before you return to user from syscall
+  //NOTE: do this after calling copy_in_string in other sys functions
 }
 
 //looking up function
