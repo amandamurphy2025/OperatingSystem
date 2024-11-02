@@ -501,7 +501,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->parent = NULL;
   t->child_process = NULL;
-  t->exit_code = -1;
   // sema_init(&t->sema_exit, 0);
   // sema_init(&t->sema_load, 0);
   // t->load = false;

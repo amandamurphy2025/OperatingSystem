@@ -179,6 +179,7 @@ process_exit (void)
   
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
   printf("%s: exit(%d)\n", cur->name, cur->child_process->exit_status);
+  file_close (cur->executable);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -304,6 +305,9 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", filename);
       goto done; 
     }
+  // deny write to open executables
+  file_deny_write(file);
+  t->executable = file;
   palloc_free_page(new_page);
 
   /* Read and verify executable header. */
@@ -389,7 +393,6 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
