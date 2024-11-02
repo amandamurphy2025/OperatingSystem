@@ -304,8 +304,12 @@ int sys_read (int fd, void *buffer, unsigned size){
 
   while (sizeToRead > 0){
     unsigned nbytes;
-
     unsigned read_amount = sizeToRead;
+
+    // if (pg_ofs (buffer) != 0){
+    //   read_amount = PGSIZE - pg_ofs (buffer);
+    // }
+
     if (read_amount > PGSIZE){
       read_amount = PGSIZE;
     }
@@ -317,7 +321,7 @@ int sys_read (int fd, void *buffer, unsigned size){
       }
       nbytes = (unsigned)tmp;
     } else {
-      int tmp = file_read_at(filedescriptor->file, buffer, read_amount, bytes_read);
+      int tmp = file_read(filedescriptor->file, buffer, read_amount);
       if (tmp < 0){
         break;
       }
@@ -433,8 +437,13 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
   while (sizeToWrite > 0){
     unsigned nbytes;
-
     unsigned write_amount = sizeToWrite;
+
+    //
+    // if (pg_ofs (buffer) != 0){
+    //   write_amount = PGSIZE - pg_ofs (buffer);
+    // }
+
     if (write_amount > PGSIZE){
       write_amount = PGSIZE;
     }
