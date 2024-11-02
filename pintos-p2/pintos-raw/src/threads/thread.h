@@ -111,9 +111,7 @@ struct thread
     int next_file;
 
     /* Chris added here */
-   //  struct semaphore parent_sema;
-   //  bool process_waiting;
-    int exit_code;
+    struct file *executable;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
