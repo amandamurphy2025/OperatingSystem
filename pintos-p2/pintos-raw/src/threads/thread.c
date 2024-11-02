@@ -215,7 +215,7 @@ struct child_process *add_child(tid_t tid){
   struct child_process *cp = palloc_get_page(0);
 
   cp->tid = tid;
-  cp->exit_status = 0;
+  cp->exit_status = -1;
   cp->i_have_exited = false;
   cp->load = false;
   cp->someone_is_waiting_on_me = false;
@@ -223,6 +223,8 @@ struct child_process *add_child(tid_t tid){
   sema_init(&cp->sema_load, 0);
 
   list_push_back(&thread_current ()->children, &cp->child_elem);
+
+  return cp;
   
 }
 
@@ -304,6 +306,12 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+  struct thread *curr = thread_current ();
+  if (curr->child_process != NULL){
+    curr->child_process->i_have_exited = true;
+    sema_up(&curr->child_process->sema_wait);
+  }
+
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -313,13 +321,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-
-  struct thread *curr = thread_current ();
-  if (curr->child_process != NULL){
-    curr->child_process->i_have_exited = true;
-    sema_up(&curr->child_process->sema_wait);
-  }
-
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();

@@ -382,8 +382,8 @@ void sys_exit (int status){
   struct thread *curr = thread_current ();
   if (curr->child_process != NULL){
     curr->child_process->exit_status = status;
-  thread_exit();
   }
+  thread_exit();
 
   //child_process is contained in the parents list
   // if (curr->child_process != NULL){

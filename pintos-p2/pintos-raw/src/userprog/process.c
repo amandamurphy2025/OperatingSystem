@@ -143,9 +143,7 @@ process_wait (tid_t child_tid)
 
   cp->someone_is_waiting_on_me = true;
 
-  if (!cp->i_have_exited){
-    sema_down(&cp->sema_wait);
-  }
+  sema_down(&cp->sema_wait);
 
   int status = cp->exit_status;
   list_remove(&cp->child_elem);
@@ -180,7 +178,7 @@ process_exit (void)
     }
   
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
-  printf("%s: exit(%d)\n", cur->name, cur->exit_code);
+  printf("%s: exit(%d)\n", cur->name, cur->child_process->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
