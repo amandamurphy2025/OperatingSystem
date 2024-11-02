@@ -661,7 +661,7 @@ struct file_descriptor *lookup_fd(int handle){
 int add_file_to_file_table(struct file *add_me_file){
 
   struct thread *curr = thread_current();
-  struct file_descriptor *fd = palloc_get_page(sizeof(struct file_descriptor));
+  struct file_descriptor *fd = palloc_get_page(0);
 
   //should this loop through fd numbers to find the next available or is setting the next enough?
   fd->handle = curr->next_file;
