@@ -501,14 +501,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->parent = NULL;
   t->child_process = NULL;
-  // sema_init(&t->sema_exit, 0);
-  // sema_init(&t->sema_load, 0);
-  // t->load = false;
-
-  /* Chris added here */
-  // sema_init(&t->parent_sema, 0);
-  // t->process_waiting = false;
-  // t->exit_code = -1;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -623,27 +615,6 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
-}
-
-/* Get thread by tid */
-struct thread *get_child_thread_by_tid(struct thread *t, tid_t tid)
-{
-  struct list_elem *e;
-  // disable interrupts 
-  enum intr_level old_level = intr_disable();
-
-  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
-  {
-    struct thread *t = list_entry(e, struct thread, allelem);
-    if(t->tid == tid)
-    {
-      intr_set_level(old_level);
-      return t;
-    }
-  }
-
-  intr_set_level(old_level);
-  return NULL;
 }
 
 
