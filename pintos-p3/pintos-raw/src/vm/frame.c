@@ -62,15 +62,45 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
 
    for (size_t i = 0; i < frame_cnt; i++){
       struct frame *f = &frames[i];
+      lock_acquire(&f->lock);
       if (f->page == NULL){
-         lock_acquire(&f->lock);
          f->page = page;
          lock_release(&scan_lock);
          return f;
       }
+      lock_release(&f->lock);
    }
 
-   //eviction stuff will go here
+   // eviction
+   // for (i = 0; i < frame_cnt * 2; i++){
+   //    struct frame *f = &frames[hand];
+   //    if (++hand >= frame_cnt){
+   //       hand = 0;
+   //    }
+
+   //    lock_acquire(&f->lock);
+
+   //    if (f->page == NULL){
+   //       f->page = page;
+   //       lock_release(&scan_lock);
+   //       return f;
+   //    }
+
+   //    if (page_accessed_recently (f->page)){
+   //       lock_release(&f->lock);
+   //       continue;
+   //    }
+
+   //    lock_release(&scan_lock);
+
+   //    if (!page_out(f->page)){
+   //       lock_release(&f->lock);
+   //       return NULL;
+   //    }
+   //    f->page = page;
+   //    return f;
+
+   // }
 
    lock_release(&scan_lock);
    return NULL;
@@ -106,8 +136,6 @@ void frame_free (struct frame *f) {
 
    f->page = NULL;
    lock_release(&f->lock);
-
-   //palloc_free_page(f->base);
    
 }
 
@@ -116,17 +144,6 @@ void frame_free (struct frame *f) {
 void frame_unlock (struct frame *f) {
    ASSERT(lock_held_by_current_thread(&f->lock));
    lock_release(&f->lock); 
-}
-
-
-
-static struct frame *find_frame(void *base){
-   for (int i = 0; i < frame_cnt; i++){
-      if (frames[i].base == base){
-         return &frames[i];
-      }
-   }
-   return NULL;
 }
 
 

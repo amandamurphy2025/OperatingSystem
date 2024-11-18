@@ -502,6 +502,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->children);
 
   //AMANDA ADDING AGAIN
+  t->spt = NULL;
 
   t->parent = NULL;
   t->child_process = NULL;

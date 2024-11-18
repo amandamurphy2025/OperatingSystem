@@ -107,7 +107,7 @@ struct thread
     struct child_process *child_process;
 
     /*AMANDA ADDING AGAIN*/
-    struct hash spt;
+    struct hash *spt;
     struct lock spt_lock;
 
    //  struct semaphore sema_exit;

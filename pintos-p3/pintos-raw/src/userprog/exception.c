@@ -5,7 +5,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -157,36 +156,18 @@ page_fault (struct intr_frame *f)
       return;
    }
 
-   if (fault_addr == NULL || !is_user_vaddr(fault_addr) || fault_addr >= PHYS_BASE){
-      kill(f);
-      return;
-   }
-
-   struct page *page = page_for_addr(fault_addr);
-
-   if (page == NULL){
-      void *page_addr = pg_round_down (fault_addr);
-      page = page_allocate(page_addr, !write);
-      if (page == NULL){
-         kill(f);
-         return;
-      }
-   }
-   
-   if ((write && page->read_only)){
-      kill(f);
-      return;
-   }
-
-   bool success = page_in(fault_addr);
-   if (!success){
-      kill(f);
-      return;
-   }
-
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
+
+   if (user && not_present){
+      if (!page_in(fault_addr)){
+         thread_exit();
+      }
+      return;
+   }
+
+
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
@@ -195,4 +176,3 @@ page_fault (struct intr_frame *f)
 
   kill (f);
 }
-

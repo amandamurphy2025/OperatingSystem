@@ -5,6 +5,7 @@
 #include "threads/synch.h"
 #include <hash.h>
 #include <debug.h>
+#include "devices/block.h"
 
 /*
 Just prototypes, see page.c for more detail
@@ -21,6 +22,9 @@ struct page {
     struct hash_elem hash_elem;
     struct frame *frame;
     struct thread *thread;
+
+    block_sector_t swap_sect;
+    bool priv;
 
     //file stuff
     struct file *file;

@@ -23,13 +23,12 @@ static void destroy_page (struct hash_elem *p_, void *aux UNUSED)  {
 
 /* Destroys the current process's page table. */
 void page_exit (void)  {
-
    struct hash *h = &thread_current ()->spt;
    if (h != NULL){
       hash_destroy(h, destroy_page);
    }
-
 }
+
 
 /* Returns the page containing the given virtual ADDRESS,
    or a null pointer if no such page exists.
@@ -47,6 +46,7 @@ struct page *page_for_addr (const void *address) {
       }
 
       //stack growth here ?????
+
    }
    return NULL;
 
@@ -70,8 +70,7 @@ static bool do_page_in (struct page *p) {
          frame_unlock(p->frame);
          return false;
       }
-   }
-   else {
+   } else {
       memset(p->frame->base, 0, PGSIZE);
    }
    return true;
@@ -101,31 +100,6 @@ bool page_in (void *fault_addr) {
 
    frame_unlock(page->frame);
    return success;
-   // struct page *p = page_for_addr(fault_addr);
-   // if (p == NULL){
-   //    return false;
-   // }
-
-   // struct frame *frame = try_frame_alloc_and_lock(p);
-   // if (frame == NULL){
-   //    return false;
-   // }
-
-   // if (p->file != NULL){
-   //    off_t read = file_read_at(p->file, frame->base, p->f_bytes, p->file_offset);
-   //    if (read != (off_t) p->f_bytes){
-   //       frame->page = NULL;
-   //       frame_unlock(frame);
-   //       return false;
-   //    }
-   //    memset(frame->base + read, 0, p->leftover_bytes);
-   // } else {
-   //    memset(frame->base, 0, PGSIZE);
-   // }
-
-   // p->frame = frame;
-   // frame_unlock(frame);
-   // return true;
 
 }
 
@@ -146,7 +120,7 @@ bool page_accessed_recently (struct page *p) {
    bool accessed_recently_queen;
 
    ASSERT(p->frame != NULL);
-   //assert lock too?
+   ASSERT(lock_held_by_current_thread(&p->frame->lock));
 
    accessed_recently_queen = pagedir_is_accessed(p->thread->pagedir, p->addr);
    if (accessed_recently_queen){
@@ -162,11 +136,13 @@ bool page_accessed_recently (struct page *p) {
    allocation fails. */
 struct page * page_allocate (void *vaddr, bool read_only) {
 
-   struct page *p = palloc_get_page(0);
+   struct page *p = palloc_get_page(PAL_USER);
    struct thread *curr_thread = thread_current ();
    if (p != NULL){
       p->addr = pg_round_down(vaddr);
       p->read_only = read_only;
+      p->priv = !read_only;
+      p->swap_sect = (block_sector_t) -1;
       p->thread = curr_thread;
       p->frame = NULL;
       p->file = NULL;
@@ -179,7 +155,6 @@ struct page * page_allocate (void *vaddr, bool read_only) {
       }
    }
    return p;
-
 }
 
 
@@ -190,8 +165,8 @@ void page_deallocate (void *vaddr) {
    struct page *p = page_for_addr(vaddr);
    ASSERT(p != NULL);
 
+   lock_acquire(&p->frame->lock);
    if (p->frame != NULL){
-      lock_acquire(&p->frame->lock);
       p->frame->page = NULL;
       lock_release(&p->frame->lock);
       p->frame = NULL;

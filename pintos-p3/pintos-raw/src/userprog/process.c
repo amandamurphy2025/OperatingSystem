@@ -17,8 +17,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "vm/frame.h"
-#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *file_name, void (**eip) (void), void **esp);
@@ -162,6 +160,8 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  //page_exit();
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -299,9 +299,6 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
-  hash_init(&t->spt, page_hash, page_less, NULL);
-  lock_init(&t->spt_lock);    
 
   /* Open executable file. */
   file = filesys_open (filename);
@@ -481,40 +478,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      struct page *p = page_allocate (upage, !writable);
-      if (p == NULL){
+      /* Get a page of memory. */
+      struct page *p = page_allocate(upage, !writable);
+      if (p == NULL)
         return false;
+
+      if (page_read_bytes > 0){
+        p->file = file;
+        p->file_offset = ofs;
+        p->f_bytes = page_read_bytes;
       }
-      p->file = file;
-      p->file_offset = ofs;
-      p->f_bytes = page_read_bytes;
-
-      // /* Get a page of memory. */
-      // uint8_t *kpage = palloc_get_page (PAL_USER);
-      // if (kpage == NULL)
-      //   return false;
-
-      // /* Load this page. */
-      // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
-      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      // /* Add the page to the process's address space. */
-      // if (!install_page (upage, kpage, writable)) 
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-      //add this part?
       ofs += page_read_bytes;
+      upage += PGSIZE;
     }
   return true;
 }
@@ -531,6 +510,8 @@ push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size)
   return kpage + *ofs + (padsize - size);
 }
 
+/* Create a minimal stack by mapping a zeroed page at the top of
+   user virtual memory. */
 static bool
 setup_stack (void **esp, char *cmd) 
 {
@@ -538,72 +519,72 @@ setup_stack (void **esp, char *cmd)
   uint32_t cmd_size = strlen(cmd);
   if (cmd_size > PGSIZE)
   {
-    return false;
+    return NULL;
   }
 
-  // uint8_t *kpage;
-  uint8_t *stack_bottom = ((uint8_t *) PHYS_BASE) - PGSIZE;
   bool success = false;
 
-  struct page *page = page_allocate (stack_bottom, false);
-  if (page == NULL){
-    return false;
-  }
-
-  page->frame = frame_alloc_and_lock(page);
-  if (page->frame == NULL){
-    return false;
-  }
-  uint8_t *kpage = page->frame->base;
-  memset(kpage, 0, PGSIZE);
-  success = install_page (stack_bottom, kpage, true);
-  if (success)
-  {  
-    *esp = PHYS_BASE;
-    size_t offset = PGSIZE;
-    
-    /* Push command line string onto stack */
-    push(kpage, &offset, cmd, cmd_size + 1);
-
-    /* Parse string */
-    char *argv[128];
-    int argc = 0;
-    char *token, *save_ptr;
-
-    for (token = strtok_r (kpage + PGSIZE - cmd_size - 1, " ", &save_ptr); 
-        token != NULL;
-        token = strtok_r (NULL, " ", &save_ptr))
+  struct page *p = page_allocate(((uint8_t *) PHYS_BASE) - PGSIZE, false);
+  if (p != NULL) 
     {
-      argv[argc] = token;
-      argc++;
+      p->frame = try_frame_alloc_and_lock(p);
+      if (p->frame != NULL)
+        {
+          success = install_page(p->addr, p->frame->base, true);
+          if (success)
+            {
+              *esp = PHYS_BASE;
+              uint8_t *kpage = p->frame->base;
+              size_t offset = PGSIZE;
+              
+              /* Command line parsing and stack setup code remains the same */
+              uint32_t cmd_size = strlen(cmd);
+              if (cmd_size > PGSIZE)
+                return false;
+
+              /* Push command line string */
+              push(kpage, &offset, cmd, cmd_size + 1);
+              
+              /* Parse arguments - existing code remains the same */
+              char *argv[128];
+              int argc = 0;
+              char *token, *save_ptr;
+              
+              for (token = strtok_r (kpage + PGSIZE - cmd_size - 1, " ", &save_ptr); 
+                   token != NULL;
+                   token = strtok_r (NULL, " ", &save_ptr))
+                {
+                  argv[argc] = token;
+                  argc++;
+                }
+
+              /* Push null sentinel */
+              void *null = NULL;
+              push(kpage, &offset, &null, sizeof(void *));
+
+              /* Push arguments in reverse */
+              void *userarg;
+              for (int i = argc - 1; i >= 0; i--)
+                {
+                  userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
+                  push(kpage, &offset, &userarg, sizeof(void *));
+                }
+
+              /* Push argv, argc, and fake return address */
+              void *lastarg = PHYS_BASE - PGSIZE + offset;
+              push(kpage, &offset, &lastarg, sizeof(uint32_t));
+              push(kpage, &offset, &argc, sizeof(int));
+              push(kpage, &offset, &null, sizeof(void *));
+
+              *esp = PHYS_BASE - PGSIZE + offset;
+            }
+          frame_unlock(p->frame);
+        }
+      if (!success)
+        page_deallocate(p->addr);
     }
-
-    void *null = NULL;
-    push(kpage, &offset, &null, sizeof(void *));
-
-    // push args in reverse order
-    void *userarg;
-    for (int i = argc - 1; i >= 0; i--)
-    {
-      userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
-      push(kpage, &offset, &userarg, sizeof(void *));
-    }
-
-    // push argv * and argc
-    // argv is pointed to by the stack pointer
-    void *lastarg = PHYS_BASE - PGSIZE + offset;
-    push(kpage, &offset, &lastarg, sizeof(uint32_t)); //?
-    push(kpage, &offset, &argc, sizeof(int));
-    push(kpage, &offset, &null, sizeof(void *));
-
-    *esp = PHYS_BASE - PGSIZE + offset;     
-  } else {
-    frame_free(page->frame);
-  }
-  frame_unlock(page->frame);
   return success;
 }
-
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
