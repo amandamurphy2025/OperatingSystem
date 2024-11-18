@@ -1,4 +1,4 @@
-
+#include "vm/swap.h"
 /*
 
 Managing the swap table
@@ -41,6 +41,7 @@ swap_init (void)
 bool
 swap_in (struct page *p)
 {
+  return false;
     // might want to use these functions:
     // - lock_held_by_current_thread()
     // - block_read()
@@ -51,6 +52,7 @@ swap_in (struct page *p)
 bool 
 swap_out (struct page *p) 
 {
+  return false;
   
   // might want to use these functions:
   // - lock_held_by_current_thread()

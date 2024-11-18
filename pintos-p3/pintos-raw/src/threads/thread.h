@@ -2,7 +2,10 @@
 #define THREADS_THREAD_H
 
 #include <debug.h>
+#include <hash.h>
 #include <list.h>
+#include "vm/page.h"
+#include "vm/frame.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "threads/synch.h"
@@ -102,6 +105,10 @@ struct thread
     struct thread *parent;
     struct list children;
     struct child_process *child_process;
+
+    /*AMANDA ADDING AGAIN*/
+    struct hash spt;
+    struct lock spt_lock;
 
    //  struct semaphore sema_exit;
    //  bool load;

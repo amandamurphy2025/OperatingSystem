@@ -8,6 +8,8 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
@@ -498,6 +500,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->next_file = 2;
   list_init(&t->files);
   list_init(&t->children);
+
+  //AMANDA ADDING AGAIN
 
   t->parent = NULL;
   t->child_process = NULL;

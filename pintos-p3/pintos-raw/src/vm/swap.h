@@ -1,5 +1,10 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
+#include "threads/synch.h"
+#include "threads/vaddr.h"
+#include "devices/block.h"
+#include <list.h>
+#include "vm/page.h"
 /*
 Just prototypes. See swap.c for more details.
 */

@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -153,6 +154,33 @@ page_fault (struct intr_frame *f)
    {
       f->eip = (void (*) (void)) f->eax;
       f->eax = 0;
+      return;
+   }
+
+   if (fault_addr == NULL || !is_user_vaddr(fault_addr) || fault_addr >= PHYS_BASE){
+      kill(f);
+      return;
+   }
+
+   struct page *page = page_for_addr(fault_addr);
+
+   if (page == NULL){
+      void *page_addr = pg_round_down (fault_addr);
+      page = page_allocate(page_addr, !write);
+      if (page == NULL){
+         kill(f);
+         return;
+      }
+   }
+   
+   if ((write && page->read_only)){
+      kill(f);
+      return;
+   }
+
+   bool success = page_in(fault_addr);
+   if (!success){
+      kill(f);
       return;
    }
 

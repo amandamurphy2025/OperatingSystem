@@ -1,4 +1,12 @@
-
+#include "vm/frame.h"
+#include <stdio.h>
+#include "vm/page.h"
+#include "devices/timer.h"
+#include "threads/init.h"
+#include "threads/malloc.h"
+#include "threads/palloc.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 
 /*
 Managing the frame table
@@ -22,6 +30,10 @@ kernel.
 // we just provide frame_init() for swap.c
 // the rest is your responsibility
 
+static struct frame *frames;
+static size_t frame_cnt;
+
+
 void
 frame_init (void)
 {
@@ -44,19 +56,77 @@ frame_init (void)
 
 /* Tries to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
-static struct frame *try_frame_alloc_and_lock (struct page *page) {}
+struct frame *try_frame_alloc_and_lock (struct page *page) {
+
+   lock_acquire(&scan_lock);
+
+   for (size_t i = 0; i < frame_cnt; i++){
+      struct frame *f = &frames[i];
+      if (f->page == NULL){
+         lock_acquire(&f->lock);
+         f->page = page;
+         lock_release(&scan_lock);
+         return f;
+      }
+   }
+
+   //eviction stuff will go here
+
+   lock_release(&scan_lock);
+   return NULL;
+}
+
+
 /* Tries really hard to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
-static struct frame *frame_alloc_and_lock (struct page *page) {}
+struct frame *frame_alloc_and_lock (struct page *page) {
+
+   struct frame *f = try_frame_alloc_and_lock (page);
+   if (f != NULL){
+      return f;
+   }
+   return NULL;
+
+}
+
 /* Locks P's frame into memory, if it has one.
    Upon return, p->frame will not change until P is unlocked. */
-void frame_lock (struct page *p) {}
+void frame_lock (struct page *p) {
+   if (p->frame != NULL){
+      lock_acquire(&p->frame->lock);
+   }
+}
+
 /* Releases frame F for use by another page.
    F must be locked for use by the current process.
    Any data in F is lost. */
-void frame_free (struct frame *f) {}
+void frame_free (struct frame *f) {
+
+   ASSERT (lock_held_by_current_thread(&f->lock));
+
+   f->page = NULL;
+   lock_release(&f->lock);
+
+   //palloc_free_page(f->base);
+   
+}
+
 /* Unlocks frame F, allowing it to be evicted.
    F must be locked for use by the current process. */
-void frame_unlock (struct frame *f) {}
+void frame_unlock (struct frame *f) {
+   ASSERT(lock_held_by_current_thread(&f->lock));
+   lock_release(&f->lock); 
+}
+
+
+
+static struct frame *find_frame(void *base){
+   for (int i = 0; i < frame_cnt; i++){
+      if (frames[i].base == base){
+         return &frames[i];
+      }
+   }
+   return NULL;
+}
 
 
