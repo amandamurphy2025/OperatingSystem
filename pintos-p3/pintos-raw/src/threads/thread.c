@@ -503,6 +503,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   //AMANDA ADDING AGAIN
   t->spt = NULL;
+  t->pagedir = NULL;
 
   t->parent = NULL;
   t->child_process = NULL;

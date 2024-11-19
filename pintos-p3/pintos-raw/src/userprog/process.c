@@ -160,7 +160,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  //page_exit();
+  page_exit();
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -463,38 +463,35 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
+  while (read_bytes > 0 || zero_bytes > 0)
+  {
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    // ***************************************
+    // NEW: load segment modification
+    // calls page allocate and set page to file info mapping
+    // ***************************************
+    struct page *p = page_allocate (upage, !writable);
+    if (p == NULL)
+      return false;
+    if (page_read_bytes > 0)
     {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      struct page *p = page_allocate(upage, !writable);
-      if (p == NULL)
-        return false;
-
-      if (page_read_bytes > 0){
-        p->file = file;
-        p->file_offset = ofs;
-        p->f_bytes = page_read_bytes;
-      }
-
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      ofs += page_read_bytes;
-      upage += PGSIZE;
+      p->file = file;
+      p->file_offset = ofs;
+      p->f_bytes = page_read_bytes;
     }
+    read_bytes -= page_read_bytes;
+    zero_bytes -= page_zero_bytes;
+    ofs += page_read_bytes;
+    upage += PGSIZE;
+  }
   return true;
 }
 
@@ -522,66 +519,58 @@ setup_stack (void **esp, char *cmd)
     return NULL;
   }
 
+  uint8_t *kpage;
   bool success = false;
 
-  struct page *p = page_allocate(((uint8_t *) PHYS_BASE) - PGSIZE, false);
-  if (p != NULL) 
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL) 
     {
-      p->frame = try_frame_alloc_and_lock(p);
-      if (p->frame != NULL)
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+      {  
+        *esp = PHYS_BASE;
+        size_t offset = PGSIZE;
+        
+        /* Push command line string onto stack */
+        push(kpage, &offset, cmd, cmd_size + 1);
+
+        /* Parse string */
+        char *argv[128];
+        int argc = 0;
+        char *token, *save_ptr;
+
+        for (token = strtok_r (kpage + PGSIZE - cmd_size - 1, " ", &save_ptr); 
+             token != NULL;
+             token = strtok_r (NULL, " ", &save_ptr))
         {
-          success = install_page(p->addr, p->frame->base, true);
-          if (success)
-            {
-              *esp = PHYS_BASE;
-              uint8_t *kpage = p->frame->base;
-              size_t offset = PGSIZE;
-              
-              /* Command line parsing and stack setup code remains the same */
-              uint32_t cmd_size = strlen(cmd);
-              if (cmd_size > PGSIZE)
-                return false;
-
-              /* Push command line string */
-              push(kpage, &offset, cmd, cmd_size + 1);
-              
-              /* Parse arguments - existing code remains the same */
-              char *argv[128];
-              int argc = 0;
-              char *token, *save_ptr;
-              
-              for (token = strtok_r (kpage + PGSIZE - cmd_size - 1, " ", &save_ptr); 
-                   token != NULL;
-                   token = strtok_r (NULL, " ", &save_ptr))
-                {
-                  argv[argc] = token;
-                  argc++;
-                }
-
-              /* Push null sentinel */
-              void *null = NULL;
-              push(kpage, &offset, &null, sizeof(void *));
-
-              /* Push arguments in reverse */
-              void *userarg;
-              for (int i = argc - 1; i >= 0; i--)
-                {
-                  userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
-                  push(kpage, &offset, &userarg, sizeof(void *));
-                }
-
-              /* Push argv, argc, and fake return address */
-              void *lastarg = PHYS_BASE - PGSIZE + offset;
-              push(kpage, &offset, &lastarg, sizeof(uint32_t));
-              push(kpage, &offset, &argc, sizeof(int));
-              push(kpage, &offset, &null, sizeof(void *));
-
-              *esp = PHYS_BASE - PGSIZE + offset;
-            }
-          frame_unlock(p->frame);
+          argv[argc] = token;
+          argc++;
         }
-      if (!success)
-        page_deallocate(p->addr);
+
+        void *null = NULL;
+        push(kpage, &offset, &null, sizeof(void *));
+
+        // push args in reverse order
+        void *userarg;
+        for (int i = argc - 1; i >= 0; i--)
+        {
+          userarg = PHYS_BASE - PGSIZE + (argv[i] - (char *) kpage);
+          push(kpage, &offset, &userarg, sizeof(void *));
+        }
+
+        // push argv * and argc
+        // argv is pointed to by the stack pointer
+        void *lastarg = PHYS_BASE - PGSIZE + offset;
+        push(kpage, &offset, &lastarg, sizeof(uint32_t)); //?
+        push(kpage, &offset, &argc, sizeof(int));
+        push(kpage, &offset, &null, sizeof(void *));
+
+        *esp = PHYS_BASE - PGSIZE + offset;     
+
+        //hex_dump(*esp, *esp, 100, true);   
+      }
+      else
+        palloc_free_page (kpage);
     }
   return success;
 }

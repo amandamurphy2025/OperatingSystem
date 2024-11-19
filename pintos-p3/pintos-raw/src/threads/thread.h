@@ -109,6 +109,7 @@ struct thread
     /*AMANDA ADDING AGAIN*/
     struct hash *spt;
     struct lock spt_lock;
+    void *user_esp;
 
    //  struct semaphore sema_exit;
    //  bool load;
