@@ -51,19 +51,6 @@ struct page *page_for_addr (const void *address) {
       if (esp != NULL && address >= PHYS_BASE - STACK_MAX && address >= esp-32){
          return page_allocate(page.addr, false);
       }
-
-
-
-
-      // if (address < PHYS_BASE - STACK_MAX){
-      //    return NULL;
-      // }
-      // if (address > PHYS_BASE - STACK_MAX){
-      //    if ((void *) thread_current ()->user_esp - 32 < address){
-      //       return page_allocate(page.addr, false);
-      //    }
-      // }
-
    }
    return NULL;
 
@@ -73,8 +60,7 @@ struct page *page_for_addr (const void *address) {
 /* Locks a frame for page P and pages it in.
    Returns true if successful, false on failure. */
 static bool do_page_in (struct page *p) {
-
-   p->frame = try_frame_alloc_and_lock(p);
+   p->frame = frame_alloc_and_lock(p);
    if (p->frame == NULL){
       return false;
    }
@@ -268,7 +254,6 @@ bool page_lock (const void *addr, bool will_write) {
 
 /* Unlocks a page locked with page_lock(). */
 void page_unlock (const void *addr) {
-
    struct page *page = page_for_addr(addr);
    if (page != NULL){
       frame_unlock(page->frame);

@@ -52,7 +52,6 @@ swap_in (struct page *p)
   }
   bitmap_reset(swap_bitmap, p->swap_sect / PAGE_SECTORS);
   p->swap_sect = (block_sector_t) - 1;
-
 }
 
 /* Swaps out page P, which must have a locked frame. */

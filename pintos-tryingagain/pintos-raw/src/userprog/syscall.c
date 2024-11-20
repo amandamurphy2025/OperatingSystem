@@ -150,6 +150,26 @@ const int arg_counts[] = {
   1
 };
 
+bool is_valid_user_memory(const void *buf, unsigned size)
+{
+  void *start = pg_round_down(buf);
+  void *end = (void *)(buf + size);
+
+  // loop through pages that the buffer takes and see if they are valid
+  while (start < end)
+  {
+    // see if current page is valid
+    if (!is_user_vaddr(start) || !pagedir_get_page(thread_current()->pagedir, start))
+    {
+      return false;
+    }
+
+    // move to next page
+    start = pg_round_down((void *)(start + PGSIZE));
+  }
+
+  return true;
+}
 
 static int sys_exec (const char *cmd_line){
   
@@ -284,7 +304,6 @@ int sys_filesize (int fd){
 }
 
 int sys_read (int fd, void *buffer, unsigned size){
-
   if (buffer == NULL || !is_user_vaddr(buffer)){
     sys_exit(-1);
   }
@@ -292,18 +311,6 @@ int sys_read (int fd, void *buffer, unsigned size){
   if (fd < 0){
     return -1;
   }
-
-  // //stack growth
-  // void *where_am_i = pg_round_down(buffer);
-  // void *buff_end = buffer+size;
-  // while (where_am_i < buff_end) {
-  //   struct page *p = page_for_addr(where_am_i);
-  //   if (p == NULL){
-  //     sys_exit(-1);
-  //   }
-  //   where_am_i += PGSIZE;
-  // }
-
   //just lock in in certain places for every page
 
 
@@ -321,19 +328,15 @@ int sys_read (int fd, void *buffer, unsigned size){
     unsigned nbytes;
     unsigned read_amount = sizeToRead;
 
-    // if (pg_ofs (buffer) != 0){
-    //   read_amount = PGSIZE - pg_ofs (buffer);
-    // }
-
-    if (read_amount > PGSIZE){
-      read_amount = PGSIZE;
-    }
+    read_amount = read_amount < PGSIZE - pg_ofs(buffer)
+      ? read_amount
+      : PGSIZE - pg_ofs(buffer);
 
     if (fd == STDIN_FILENO){
-      int tmp = input_getc();
       if (!page_lock(buffer, true)){
         thread_exit ();
       }
+      int tmp = input_getc();
       if (tmp < 0){
         break;
       }
@@ -343,7 +346,9 @@ int sys_read (int fd, void *buffer, unsigned size){
       if (!page_lock (buffer, true)){
         thread_exit ();
       }
+      lock_acquire(&filesys_lock);
       int tmp = file_read(filedescriptor->file, buffer, read_amount);
+      lock_release(&filesys_lock);
       page_unlock(buffer);
       if (tmp < 0){
         break;
@@ -448,15 +453,10 @@ int sys_write (int fd, const void *buffer, unsigned size){
   while (sizeToWrite > 0){
     unsigned nbytes;
     unsigned write_amount = sizeToWrite;
-
-    //
-    // if (pg_ofs (buffer) != 0){
-    //   write_amount = PGSIZE - pg_ofs (buffer);
-    // }
-
-    if (write_amount > PGSIZE){
-      write_amount = PGSIZE;
-    }
+    
+    write_amount = write_amount < PGSIZE - pg_ofs (buffer)
+      ? sizeToWrite
+      : PGSIZE - pg_ofs (buffer);
 
     if (fd == STDOUT_FILENO){
       putbuf(buffer, write_amount);

@@ -13,7 +13,7 @@ Just prototypes, see page.c for more detail
 */
 
 
-#define STACK_MAX (1024 * 1024)
+#define STACK_MAX (8 * 1024 * 1024)
 
 struct page {
 
