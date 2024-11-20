@@ -59,11 +59,15 @@ frame_init (void)
 /* Tries to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
 struct frame *try_frame_alloc_and_lock (struct page *page) {
+   //printf("frame alloc and lock\n");
    lock_acquire(&scan_lock);
 
+   //check for unlocked frame
    for (size_t i = 0; i < frame_cnt; i++){
       struct frame *f = &frames[i];
-      lock_acquire(&f->lock);
+      if (!lock_held_by_current_thread(&f->lock) && !lock_try_acquire(&f->lock)){
+         continue;
+      }
       if (f->page == NULL){
          f->page = page;
          lock_release(&scan_lock);
@@ -72,13 +76,44 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
       lock_release(&f->lock);
    }
 
-   //no frames r free :(
-   for (size_t i = 0 ; i < frame_cnt * 2 ; i++){
+   while (true)
+   {
+      //printf("looking for frame to evict\n");
+      hand += 1;
+      hand %= frame_cnt;
       struct frame *f = &frames[hand];
-      if (hand+1 >= frame_cnt){
+      if (!lock_try_acquire(&f->lock))
+      {
+         continue;
+      }
+
+
+      if (f->page != NULL)
+      {
+         if (!page_out(f->page)){
+            lock_release(&f->lock);
+            continue;
+            //lock_release(&scan_lock);
+            //return NULL;
+         } 
+      }
+
+      f->page = page;
+      lock_release(&scan_lock);
+      return f;
+   }
+   
+
+   //no frames r free :(
+   /*for (size_t i = 0 ; i < frame_cnt * 2 ; i++){
+      struct frame *f = &frames[hand];
+      hand += 1;
+      if (hand >= frame_cnt){
          hand = 0;
       }
-      lock_acquire(&f->lock);
+      if (!lock_try_acquire(&f->lock)){
+         continue;
+      }
       //MAKE SURE TO:
       //page is not null, frame is locked
       if (f->page == NULL){
@@ -93,14 +128,16 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
       lock_release (&scan_lock);
 
       //evict me!
-      if (!page_out(f->page)){
-         lock_release(&f->lock);
-         return NULL;
+      if (f->page != NULL){
+         if (!page_out(f->page)){
+            lock_release(&f->lock);
+            return NULL;
+         }
       }
       f->page = page;
       return f;
 
-   }
+   }*/
 
    lock_release(&scan_lock);
    return NULL;

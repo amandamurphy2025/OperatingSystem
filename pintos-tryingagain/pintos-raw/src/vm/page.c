@@ -61,13 +61,17 @@ struct page *page_for_addr (const void *address) {
    Returns true if successful, false on failure. */
 static bool do_page_in (struct page *p) {
    p->frame = frame_alloc_and_lock(p);
+   //printf("do page in\n");
    if (p->frame == NULL){
+      //printf("null frame\n");
       return false;
    }
 
    if (p->swap_sect != (block_sector_t) - 1){
+      //printf("swapping\n");
       swap_in(p);
    } else if (p->file != NULL){
+      //printf("file\n");
       off_t read = file_read_at(p->file, p->frame->base, p->file_bytes, p->file_offset);
       off_t zero = PGSIZE - read;
       memset(p->frame->base + read, 0, zero);
@@ -77,6 +81,7 @@ static bool do_page_in (struct page *p) {
          return false;
       }
    } else {
+      //printf("else\n");
       memset(p->frame->base, 0, PGSIZE);
    }
    return true;
@@ -86,6 +91,7 @@ static bool do_page_in (struct page *p) {
 /* Faults in the page containing FAULT_ADDR.
    Returns true if successful, false on failure. */
 bool page_in (void *fault_addr) {
+   //printf("page in\n");
 
    bool success;
 
@@ -114,15 +120,16 @@ bool page_in (void *fault_addr) {
    P must have a locked frame.
    Return true if successful, false on failure. */
 bool page_out (struct page *p) {
+   //printf("page out\n");
 
    if (p->frame == NULL){
       return false;
    }
    
    ASSERT (lock_held_by_current_thread (&p->frame->lock));
-   bool success;
+   bool success = false;
 
-   //HAVE TO CLEAR PAGEDIR PAGE
+   //HAVE TO CLEAR PAGEDIR PAGE - ROY
    //this is so there is page fault to pagein from swap device
    pagedir_clear_page(p->thread->pagedir, (void *)p->addr);
 
@@ -134,6 +141,7 @@ bool page_out (struct page *p) {
       //should the frame->page be set null too?
       p->frame = NULL;
    }
+   //printf("finished page out\n");
    return success;
 
 }
@@ -147,7 +155,7 @@ bool page_accessed_recently (struct page *p) {
    bool accessed_recently_queen;
 
    ASSERT(p->frame != NULL);
-   ASSERT(lock_held_by_current_thread(&p->frame->lock));
+   //ASSERT(lock_held_by_current_thread(&p->frame->lock));
 
    accessed_recently_queen = pagedir_is_accessed(p->thread->pagedir, p->addr);
    if (accessed_recently_queen){

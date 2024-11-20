@@ -429,18 +429,6 @@ int sys_write (int fd, const void *buffer, unsigned size){
     return -1;
   }
 
-  // //stack growth
-  // void *where_am_i = pg_round_down(buffer);
-  // void *buff_end = buffer+size;
-  // while (where_am_i < buff_end) {
-  //   struct page *p = page_for_addr(where_am_i);
-  //   if (p == NULL){
-  //     sys_exit(-1);
-  //   }
-  //   where_am_i += PGSIZE;
-  // }
-
-
   struct file_descriptor *filedescriptor = lookup_fd(fd);
   if (filedescriptor == NULL && fd != STDOUT_FILENO) {
     return -1;
@@ -459,16 +447,24 @@ int sys_write (int fd, const void *buffer, unsigned size){
       : PGSIZE - pg_ofs (buffer);
 
     if (fd == STDOUT_FILENO){
+      if (!page_lock(buffer, true)){
+        thread_exit ();
+      }
       putbuf(buffer, write_amount);
       int tmp = write_amount;
+      page_unlock(buffer);
       if (tmp < 0){
         break;
       }
       nbytes = (unsigned)tmp;
     } else {
+      if (!page_lock(buffer, true)){
+        thread_exit ();
+      }
       lock_acquire(&filesys_lock);
       int tmp = file_write(filedescriptor->file, buffer, write_amount);
       lock_release(&filesys_lock);
+      page_unlock(buffer);
       if (tmp < 0){
         break;
       }

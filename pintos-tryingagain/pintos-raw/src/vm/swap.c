@@ -41,6 +41,7 @@ swap_init (void)
 bool
 swap_in (struct page *p)
 {
+  //printf("swap in\n ");
     // might want to use these functions:
     // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -50,7 +51,9 @@ swap_in (struct page *p)
   for (size_t i = 0 ; i < PAGE_SECTORS ; i++){
     block_read (swap_device, p->swap_sect+i, p->frame->base + i * BLOCK_SECTOR_SIZE);
   }
+  lock_acquire(&swap_lock);
   bitmap_reset(swap_bitmap, p->swap_sect / PAGE_SECTORS);
+  lock_release(&swap_lock);
   p->swap_sect = (block_sector_t) - 1;
 }
 
@@ -58,7 +61,7 @@ swap_in (struct page *p)
 bool 
 swap_out (struct page *p) 
 {
-  
+  //printf("swap out\n");
   // might want to use these functions:
   // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -68,6 +71,10 @@ swap_out (struct page *p)
   lock_acquire(&swap_lock);
   size_t swap_slot = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
   lock_release(&swap_lock);
+
+  if (swap_slot == BITMAP_ERROR){
+    return false;
+  }
   //check for error?
 
   p->swap_sect = swap_slot * PAGE_SECTORS;
