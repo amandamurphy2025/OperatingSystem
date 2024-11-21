@@ -25,7 +25,7 @@ swap_init (void)
   swap_device = block_get_role (BLOCK_SWAP);
   if (swap_device == NULL)
     {
-      printf ("no swap device--swap disabled\n");
+      // printf ("no swap device--swap disabled\n");
       swap_bitmap = bitmap_create (0);
     }
   else
@@ -41,7 +41,7 @@ swap_init (void)
 bool
 swap_in (struct page *p)
 {
-  //printf("swap in\n ");
+  // printf("swap in\n ");
     // might want to use these functions:
     // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -61,7 +61,7 @@ swap_in (struct page *p)
 bool 
 swap_out (struct page *p) 
 {
-  //printf("swap out\n");
+  // printf("swap out\n");
   // might want to use these functions:
   // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -70,11 +70,10 @@ swap_out (struct page *p)
 
   lock_acquire(&swap_lock);
   size_t swap_slot = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
-  lock_release(&swap_lock);
-
   if (swap_slot == BITMAP_ERROR){
     return false;
   }
+  lock_release(&swap_lock);
   //check for error?
 
   p->swap_sect = swap_slot * PAGE_SECTORS;

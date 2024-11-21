@@ -264,6 +264,7 @@ bool sys_remove (const char *file){
 
 int sys_open (const char *file){
   //lock when grab file??????
+  printf("trying to open\n");
   if (file == NULL || !is_user_vaddr(file)){
     sys_exit(-1);
   }
@@ -277,6 +278,7 @@ int sys_open (const char *file){
   struct file *filereal = filesys_open(filename);
 
   if (filereal == NULL){
+    printf("file dne\n");
     return -1;
   }
 

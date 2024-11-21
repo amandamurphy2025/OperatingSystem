@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -151,8 +152,10 @@ page_fault (struct intr_frame *f)
 
    if (user && not_present)
    {
-      if (!page_in (fault_addr))
+      if (!page_in (fault_addr)){
          thread_exit ();
+      }
+      // printf("in exception.c\n");
       return;
    }
 
