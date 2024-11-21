@@ -123,9 +123,6 @@ start_process (void *cmd_line_)
 int
 process_wait (tid_t child_tid) 
 {
-
-  // printf("i am waiting\n");
-
   struct thread *curr = thread_current();
   struct list_elem *e;
   struct child_process *cp = NULL;
@@ -137,7 +134,6 @@ process_wait (tid_t child_tid)
       break;
     }
   }
-  // printf("i am waiting again\n");
 
   if (cp == NULL){
     return -1;
@@ -149,15 +145,11 @@ process_wait (tid_t child_tid)
 
   cp->someone_is_waiting_on_me = true;
 
-  // printf("do i even get here\n");
   sema_down(&cp->sema_wait);
-  // printf("here????\n");
 
   int status = cp->exit_status;
   list_remove(&cp->child_elem);
-  // printf("i am waiting skjcn\n");
   palloc_free_page(cp);
-  // printf("i am waitingasdfghj\n");
 
   return status;
 
@@ -175,7 +167,6 @@ process_exit (void)
   }
 
   page_exit();
-  // printf("pages exited ayay\n");
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -193,8 +184,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  // printf("everythignpages exited ayay\n");
-
   
   //thread_name() defined in thread.h, termination message defined in pintos_3.html
   printf("%s: exit(%d)\n", cur->name, cur->child_process->exit_status);
@@ -321,15 +310,12 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
   hash_init (t->pages, page_hash, page_less, NULL);
 
   /* Open executable file. */
-  //printf("am i opening here? huh\n");
-  //printf("am i opening here? huh\n");
   file = filesys_open (filename);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", filename);
       goto done; 
     }
-  //printf("i succeeded to open\n");
   // deny write to open executables
   file_deny_write(file);
   t->executable = file;

@@ -155,7 +155,6 @@ page_fault (struct intr_frame *f)
       if (!page_in (fault_addr)){
          thread_exit ();
       }
-      // printf("in exception.c\n");
       return;
    }
 

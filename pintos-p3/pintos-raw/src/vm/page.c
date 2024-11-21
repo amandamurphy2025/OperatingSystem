@@ -13,26 +13,21 @@
 static void destroy_page (struct hash_elem *p_, void *aux UNUSED)  {
 
    struct page *p = hash_entry(p_, struct page, hash_elem);
-   // printf("in destroy\n");
    frame_lock(p);
-   // printf("ilocked\n");
    if (p->frame){
       //frame_free unlocks the frame
       frame_free(p->frame);
    }
    free(p);
-   // printf("exiting destroy\n");
 }
 
 
 /* Destroys the current process's page table. */
 void page_exit (void)  {
-   // printf("in pageexit\n");
    struct hash *h = thread_current ()->pages;
    if (h != NULL){
       hash_destroy(h, destroy_page);
    }
-   // printf("done w pageexitttrue\n");
 }
 
 
@@ -67,32 +62,24 @@ struct page *page_for_addr (const void *address) {
    Returns true if successful, false on failure. */
 static bool do_page_in (struct page *p) {
    p->frame = frame_alloc_and_lock(p);
-   // printf("do page in\n");
    if (p->frame == NULL){
-      // printf("null frame\n");
       return false;
    }
 
    if (p->swap_sect != (block_sector_t) - 1){
-      // printf("swapping\n");
       swap_in(p);
    } else if (p->file != NULL){
-      // printf("file\n");
       off_t read = file_read_at(p->file, p->frame->base, p->file_bytes, p->file_offset);
-      // printf("done with read\n");
       off_t zero = PGSIZE - read;
       memset(p->frame->base + read, 0, zero);
       if (read != (off_t) p->file_bytes){
          p->frame->page = NULL;
          frame_unlock(p->frame);
-         // printf("returning from file\n");
          return false;
       }
    } else {
-      // printf("else\n");
       memset(p->frame->base, 0, PGSIZE);
    }
-   // printf("returning again from file\n");
    return true;
 }
 
@@ -100,8 +87,6 @@ static bool do_page_in (struct page *p) {
 /* Faults in the page containing FAULT_ADDR.
    Returns true if successful, false on failure. */
 bool page_in (void *fault_addr) {
-   // printf("page in\n");
-
    bool success;
 
    struct page *page = page_for_addr(fault_addr);
@@ -117,18 +102,15 @@ bool page_in (void *fault_addr) {
          }
          return false;
       }
-      // printf("in page_in NOT DO\n");
    }
    //assert lock??
    ASSERT(page->frame != NULL);
    ASSERT(lock_held_by_current_thread(&page->frame->lock));
    success = pagedir_set_page(thread_current ()->pagedir, page->addr, page->frame->base, !page->read_only);
 
-   // printf("in page_in NOT D the secondO\n");
    frame_unlock(page->frame);
-   // printf("in page_in unlocked success\n");
-   return success;
 
+   return success;
 }
 
 
@@ -136,8 +118,6 @@ bool page_in (void *fault_addr) {
    P must have a locked frame.
    Return true if successful, false on failure. */
 bool page_out (struct page *p) {
-   // printf("page out\n");
-
    if (p->frame == NULL){
       return false;
    }
@@ -157,9 +137,7 @@ bool page_out (struct page *p) {
       //should the frame->page be set null too?
       p->frame = NULL;
    }
-   //printf("finished page out\n");
    return success;
-
 }
 
 

@@ -41,7 +41,6 @@ swap_init (void)
 bool
 swap_in (struct page *p)
 {
-  // printf("swap in\n ");
     // might want to use these functions:
     // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -61,7 +60,6 @@ swap_in (struct page *p)
 bool 
 swap_out (struct page *p) 
 {
-  // printf("swap out\n");
   // might want to use these functions:
   // - lock_held_by_current_thread()
   ASSERT (lock_held_by_current_thread (&p->frame->lock));

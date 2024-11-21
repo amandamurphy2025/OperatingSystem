@@ -78,7 +78,6 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
 
    while (true)
    {
-      // printf("looking for frame to evict\n");
       hand += 1;
       hand %= frame_cnt;
       struct frame *f = &frames[hand];
@@ -87,14 +86,11 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
          continue;
       }
 
-
       if (f->page != NULL)
       {
          if (!page_out(f->page)){
             lock_release(&f->lock);
             continue;
-            //lock_release(&scan_lock);
-            //return NULL;
          } 
       }
 
@@ -103,42 +99,7 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
       return f;
    }
    
-
-   //no frames r free :(
-   /*for (size_t i = 0 ; i < frame_cnt * 2 ; i++){
-      struct frame *f = &frames[hand];
-      hand += 1;
-      if (hand >= frame_cnt){
-         hand = 0;
-      }
-      if (!lock_try_acquire(&f->lock)){
-         continue;
-      }
-      //MAKE SURE TO:
-      //page is not null, frame is locked
-      if (f->page == NULL){
-         f->page = page;
-         lock_release (&scan_lock);
-         return f;
-      }
-      if (page_accessed_recently(f->page)){
-         lock_release(&f->lock);
-         continue;
-      }
-      lock_release (&scan_lock);
-
-      //evict me!
-      if (f->page != NULL){
-         if (!page_out(f->page)){
-            lock_release(&f->lock);
-            return NULL;
-         }
-      }
-      f->page = page;
-      return f;
-
-   }*/
-
+   // dead code
    lock_release(&scan_lock);
    return NULL;
 }
@@ -184,5 +145,3 @@ void frame_unlock (struct frame *f) {
    ASSERT(lock_held_by_current_thread(&f->lock));
    lock_release(&f->lock); 
 }
-
-
