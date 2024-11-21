@@ -59,7 +59,6 @@ frame_init (void)
 /* Tries to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
 struct frame *try_frame_alloc_and_lock (struct page *page) {
-   // printf("frame alloc and lock\n");
    lock_acquire(&scan_lock);
 
    //check for unlocked frame
