@@ -157,7 +157,7 @@ bool page_out (struct page *p) {
       //should the frame->page be set null too?
       p->frame = NULL;
    }
-   printf("finished page out\n");
+   //printf("finished page out\n");
    return success;
 
 }

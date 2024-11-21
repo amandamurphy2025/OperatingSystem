@@ -321,15 +321,15 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
   hash_init (t->pages, page_hash, page_less, NULL);
 
   /* Open executable file. */
-  printf("am i opening here? huh\n");
-  printf("am i opening here? huh\n");
+  //printf("am i opening here? huh\n");
+  //printf("am i opening here? huh\n");
   file = filesys_open (filename);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", filename);
       goto done; 
     }
-  printf("i succeeded to open\n");
+  //printf("i succeeded to open\n");
   // deny write to open executables
   file_deny_write(file);
   t->executable = file;
