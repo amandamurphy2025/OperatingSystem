@@ -181,7 +181,7 @@ static int sys_exec (const char *cmd_line){
   if (command == NULL){
     return -1;
   }
-
+  lock_acquire(&filesys_lock);
   //call process execute
   tid_t tid = process_execute(command);
   palloc_free_page(command);
@@ -206,14 +206,17 @@ static int sys_exec (const char *cmd_line){
 
   if (child == NULL){
     return -1;
+    lock_release(&filesys_lock);
   }
 
   //check loading status
   sema_down(&child->sema_load);
 
   if (!child->load){
+    lock_release(&filesys_lock);
     return -1;
   }
+  lock_release(&filesys_lock);
   return tid;
 
 }
