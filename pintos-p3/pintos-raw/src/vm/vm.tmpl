@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Amanda Murphy akmurphak@uchicago.edu
+Chris Marshall chrismarshall@uchicago.edu
 
 ---- PRELIMINARIES ----
 
@@ -30,24 +29,124 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct page {
+
+    void *addr; //address
+    bool read_only; //can i read or write too?
+
+    struct hash_elem hash_elem; //hash element that goes in the thread struct
+    struct frame *frame; //frame i am associated with
+    struct thread *thread; //thread who owns me
+
+    block_sector_t swap_sect; //swap sector number
+
+    //file stuff
+    struct file *file;
+    off_t file_offset;
+    size_t file_bytes;
+
+};
+
+The page struct is used to contain the supplemental page data, such as the address, the boolean for read only, the hash_element for the pages list, and its frame and thread.
+
+struct frame {
+    void *base; //this is the kernel virt address ("phyical") - Roy
+    struct page *page; //keeping track of the page associated with this frame
+    struct lock lock; //lock for the frame
+};
+
+The frame struct just has the address which is akin to the physical address, the page, and a lock for the frame.  This is for the frame table.
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority. */
+    struct list_elem allelem;           /* List element for all threads list. */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+
+    /*AMANDA ADDED HERE*/
+    struct thread *parent;
+    struct list children;
+    struct child_process *child_process;
+
+
+   //ADDING HERE FROM GUIDE
+    struct hash *pages;
+    void *user_esp;
+
+   //  struct semaphore sema_exit;
+   //  bool load;
+   //  struct semaphore sema_load;
+
+    struct list files;
+    int next_file;
+
+    /* Chris added here */
+    struct file *executable;
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+
+In thread struct, I just added the hash structure pages for each process/thread's page table and the user_esp which is the stack pointer (this was given in guide code).
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
+	This happens in try_frame_alloc_and_lock.  Essentially it loops throught the frames in
+	the frame table until it finds one that is unlocked.  When it finds one, it sets the frame's page
+	to the given page.  If it does not find one, it evicts someone using page_out.
+
+	Every frame has a pointer to the page associated with it, and every page has a pointer
+	to its frame.
+
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+	At offcie hours, Roy said we did not have to deal with dirty bits.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+	Each frame has a lock, and the whole frame table has a lock - the scan_lock.
+	The scan lock prevents any two threads to access the frame list at the same time.
+	The scan_lock covers the try_frame_alloc_and_lock function so that when one
+	loops through to find a frame, none of the others can.
+
+	The lock on each frame makes sure that only one thread can access at a time.
+	Before setting the f->page, the frame is tried to be locked by whichever thread
+	is currently running.
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+	The data structures we used are the frame and the page structs, and the page hash list in thread.
+	Each page has an associated frame, and each frame has an associated page.  
+	The frame's base field contains the "physical" address which is the kernel virtual address (explained
+	to us by Roy during office hours).  The page has a field addr which is its user virtual address.
+	The physical address is accessible through page->frame->base.
+
+	We used hash for the page tables because this was recommended in the guide code, and also
+	because it allows for fast lookup.
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -58,18 +157,40 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+	No additional structs here just the ones defined above.  In the page struct there's a swap_sect
+	field that is the first swap sector for that page.
+	Its initialized to -1 as like an indicator that nothing has been swapped (clarified in OH with Roy).
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+	This is done by looping through the frames list with the hand index until an unlocked
+	page is found.  The frame can still have frame->page not NULL, and in this case 
+	it will be evicted.  It is quite simple - just looks for an unlocked frame like usual
+	but the frame can have an associated page.
+
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+	There are a few steps when this happens (in page_out and try_frame_alloc_and_lock):
+		1. the page is deleted from the hash table it is in
+		2. the page's frame is set to NULL
+		3. the frame's new page is set to the one the new process P is putting in
+
+
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+	This is a bunch of funny math that Roy helped us out with during office hours.
+	Essentially, the address has to be bigger than the PHYS_BASE - STACK_MAX, which is a lower
+	bound of the stack address, and it also has to be within 32 bytes of the stack pointer.
+	If these two conditions are true, then we can extend the stack.
 
 ---- SYNCHRONIZATION ----
 
@@ -78,21 +199,45 @@ FirstName LastName <email@domain.example>
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+	Essentially, there is a lock on each frame.  This is the major thing we use for
+	synchronization.  Anytime someone wants a frame, it tries to acquire this lock.
+	Once someone has this lock, no one else will be able to get the frame/modify the frame.
+	The frame is unlocked when the hash_table is destroyed --> in frame_free in destroy_page.
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+	This seems to be an issue.  Currently during eviction, the frame is locked, which
+	I thought was enough to ensure synchronization. I believe this is enough though, because
+	while any process holds the frame lock no others can touch it. I would worry that Q could 
+	still modify its page though if it is not accessing it via the frame->page, which is
+	entirely possible.  There's definitely a race condition here.  I think perhaps it could
+	be solved by placing a lock on the page struct as well and locking that during eviction?
+
+	We decided towards the end to add a lock around sys_exec which fixed some concurrency issues.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+	So long as someone holds the frame's lock, it will not be evicted.  In page_in,
+	the frame is locked before anything.  So, while it is being read in, nobody else can evict
+	because another process is holding the lock.
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+	The page fault brings in a page (exception.c).  It does this by calling page_in,
+	which grabs a frame and sets frame->page=p.  In the syscalls, we use page_lock as specified in
+	the guide's given code, which also calls page_for_addr.  Page_for_addr will grab a new
+	page for the stack if it can.  If its beyond the OK addresses, it will simply not allocate
+	a page and return NULL.
 
 ---- RATIONALE ----
 
@@ -103,6 +248,18 @@ FirstName LastName <email@domain.example>
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
+	The only very small lock we have is the frame lock.  The rest of the locks are generally quite large.
+	For example, the lock in sys_exec spans most of the function.  We had a lot of trouble trying to figure out where
+	the race condition in parallelism is.  This is why we ended up using a larger lock over sys_exec.  I think we covered most
+	if not all of the areas where the frame lock is needed, but I think we probably needed a lock over the page structs
+	in some places as well, because we are still experiencing race conditions every so often in page_parallel.
+	We always made sure to lock the frame whenever it was being accessed.
+
+	The important locks we had include: the frame struct lock, the scan_lock for frame table, the swap lock provided by
+	the guide code.
+
+
+
 			 MEMORY MAPPED FILES
 			 ===================
 
@@ -111,6 +268,10 @@ FirstName LastName <email@domain.example>
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+	Roy said during office hours we did not have to do this.  We started working on this before we where
+	sure we did not need to do it so there may be some remaining bits from this part that we did not delete,
+	but most of it should be cleaned up.
 
 ---- ALGORITHMS ----
 

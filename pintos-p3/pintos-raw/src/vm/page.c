@@ -158,6 +158,7 @@ bool page_out (struct page *p) {
    }
 
    if (success){
+      // hash_delete(p->thread->pages, &p->hash_elem);
       //should the frame->page be set null too?
       p->frame = NULL;
    }
