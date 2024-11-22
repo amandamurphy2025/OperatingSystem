@@ -499,6 +499,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->files);
   list_init(&t->children);
 
+  //ADDING HERE FROM GUIDES
   t->pagedir = NULL;
   t->pages = NULL;
 

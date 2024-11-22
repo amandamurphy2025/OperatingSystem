@@ -17,14 +17,14 @@ Just prototypes, see page.c for more detail
 
 struct page {
 
-    void *addr;
-    bool read_only;
+    void *addr; //address
+    bool read_only; //can i read or write too?
 
-    struct hash_elem hash_elem;
-    struct frame *frame;
-    struct thread *thread;
+    struct hash_elem hash_elem; //hash element that goes in the thread struct
+    struct frame *frame; //frame i am associated with
+    struct thread *thread; //thread who owns me
 
-    block_sector_t swap_sect;
+    block_sector_t swap_sect; //swap sector number
 
     //file stuff
     struct file *file;

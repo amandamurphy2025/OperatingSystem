@@ -47,12 +47,16 @@ swap_in (struct page *p)
     // - block_read()
     // - bitmap_reset()
 
+  //loop thru the number of sects per page
   for (size_t i = 0 ; i < PAGE_SECTORS ; i++){
     block_read (swap_device, p->swap_sect+i, p->frame->base + i * BLOCK_SECTOR_SIZE);
   }
   lock_acquire(&swap_lock);
+  //reset to default value 
   bitmap_reset(swap_bitmap, p->swap_sect / PAGE_SECTORS);
   lock_release(&swap_lock);
+
+  //set swapsect back to -1
   p->swap_sect = (block_sector_t) - 1;
 }
 
@@ -67,6 +71,7 @@ swap_out (struct page *p)
   // - block_write()
 
   lock_acquire(&swap_lock);
+  //tried cnt = PAGE_SECTORS and caused errors
   size_t swap_slot = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
   if (swap_slot == BITMAP_ERROR){
     return false;
@@ -74,10 +79,11 @@ swap_out (struct page *p)
   lock_release(&swap_lock);
   //check for error?
 
+  //calc first sector for writing page: bitmap slot --> sector number
   p->swap_sect = swap_slot * PAGE_SECTORS;
 
   for (size_t i = 0 ; i < PAGE_SECTORS ; i++){
-    block_write(swap_device, p->swap_sect + i, p->frame->base + i * BLOCK_SECTOR_SIZE);
+    block_write(swap_device, p->swap_sect + i, p->frame->base + (i * BLOCK_SECTOR_SIZE));
   }
 
   p->file = NULL;

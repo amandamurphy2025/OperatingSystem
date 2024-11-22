@@ -362,6 +362,7 @@ intr_handler (struct intr_frame *frame)
   // **********************************
   // NEW: For internal interrupts...
   // **********************************
+  //copied from given code
   else
   {
     thread_current ()->user_esp = frame->esp;

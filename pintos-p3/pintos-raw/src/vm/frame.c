@@ -67,7 +67,9 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
       if (!lock_held_by_current_thread(&f->lock) && !lock_try_acquire(&f->lock)){
          continue;
       }
+      //if we get here then the frame was unlocked
       if (f->page == NULL){
+         //check if already w page - if not set page
          f->page = page;
          lock_release(&scan_lock);
          return f;
@@ -75,16 +77,20 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
       lock_release(&f->lock);
    }
 
+   //evicitoin time
    while (true)
    {
+      //thank u Roy
       hand += 1;
       hand %= frame_cnt;
       struct frame *f = &frames[hand];
+      //if cant get the lock, try the next one
       if (!lock_try_acquire(&f->lock))
       {
          continue;
       }
 
+      //evict the page
       if (f->page != NULL)
       {
          if (!page_out(f->page)){
@@ -93,6 +99,7 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
          } 
       }
 
+      //new page for me
       f->page = page;
       lock_release(&scan_lock);
       return f;
@@ -106,6 +113,8 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
 /* Tries really hard to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
 struct frame *frame_alloc_and_lock (struct page *page) {
+
+   //from Jack comment on Ed - try try again and sleep for a bit each time until maybe there will be an unlocked frame
 
    size_t do_it_again;
 
@@ -122,6 +131,7 @@ struct frame *frame_alloc_and_lock (struct page *page) {
 /* Locks P's frame into memory, if it has one.
    Upon return, p->frame will not change until P is unlocked. */
 void frame_lock (struct page *p) {
+   //only lock if a frame exists
    if (p->frame != NULL){
       lock_acquire(&p->frame->lock);
    }
@@ -131,6 +141,9 @@ void frame_lock (struct page *p) {
    Any data in F is lost. */
 void frame_free (struct frame *f) {
 
+   //yeah i dont really use this lol
+
+   //F must be locked for use by the current process.
    ASSERT (lock_held_by_current_thread(&f->lock));
 
    f->page = NULL;
@@ -141,6 +154,7 @@ void frame_free (struct frame *f) {
 /* Unlocks frame F, allowing it to be evicted.
    F must be locked for use by the current process. */
 void frame_unlock (struct frame *f) {
+   //make sure its held by me before i unlock
    ASSERT(lock_held_by_current_thread(&f->lock));
    lock_release(&f->lock); 
 }

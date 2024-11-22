@@ -103,6 +103,8 @@ struct thread
     struct list children;
     struct child_process *child_process;
 
+
+   //ADDING HERE FROM GUIDE
     struct hash *pages;
     void *user_esp;
 

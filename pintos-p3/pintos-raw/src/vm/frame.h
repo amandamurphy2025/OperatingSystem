@@ -10,9 +10,9 @@ Just prototypes. See frame.c for more detail.
 */
 
 struct frame {
-    void *base; //this is the kernel virt address ("phyical")
-    struct page *page;
-    struct lock lock;
+    void *base; //this is the kernel virt address ("phyical") - Roy
+    struct page *page; //keeping track of the page associated with this frame
+    struct lock lock; //lock for the frame
 };
 
 
