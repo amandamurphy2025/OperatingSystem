@@ -1,20 +1,22 @@
-       	       	    +---------------------------+
-		    |		CS 140		|
+       	    +---------------------------+
+		    |		CS 140				|
 		    | PROJECT 3: VIRTUAL MEMORY	|
-		    |	   DESIGN DOCUMENT	|
+		    |	   DESIGN DOCUMENT		|
 		    +---------------------------+
 
 ---- GROUP ----
 
 >> Fill in the names and email addresses of your group members.
 
-Amanda Murphy akmurphak@uchicago.edu
-Chris Marshall chrismarshall@uchicago.edu
+50% Amanda Murphy akmurphak@uchicago.edu
+50% Chris Marshall chrismarshall@uchicago.edu
 
 ---- PRELIMINARIES ----
 
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
+
+Expected score 47/47
 
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
@@ -189,8 +191,9 @@ In thread struct, I just added the hash structure pages for each process/thread'
 
 	This is a bunch of funny math that Roy helped us out with during office hours.
 	Essentially, the address has to be bigger than the PHYS_BASE - STACK_MAX, which is a lower
-	bound of the stack address, and it also has to be within 32 bytes of the stack pointer.
-	If these two conditions are true, then we can extend the stack.
+	bound of the stack address, less than PHYS_BASE, which is an upper bound on the stack,
+	and it also has to be within 32 bytes of the stack pointer.
+	If these three conditions are true, then we can extend the stack.
 
 ---- SYNCHRONIZATION ----
 
@@ -258,6 +261,8 @@ In thread struct, I just added the hash structure pages for each process/thread'
 	The important locks we had include: the frame struct lock, the scan_lock for frame table, the swap lock provided by
 	the guide code.
 
+	We chose this section of the continuum for its ease of implementation. After all, we won't be building the 
+	most performant system in Pintos. Instead, we chose something that was easier to verify the correctness of.
 
 
 			 MEMORY MAPPED FILES
