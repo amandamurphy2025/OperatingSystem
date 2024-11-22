@@ -65,6 +65,7 @@ struct frame *try_frame_alloc_and_lock (struct page *page) {
    for (size_t i = 0; i < frame_cnt; i++){
       struct frame *f = &frames[i];
       if (!lock_held_by_current_thread(&f->lock) && !lock_try_acquire(&f->lock)){
+         //try the next frame
          continue;
       }
       //if we get here then the frame was unlocked
@@ -140,8 +141,6 @@ void frame_lock (struct page *p) {
    F must be locked for use by the current process.
    Any data in F is lost. */
 void frame_free (struct frame *f) {
-
-   //yeah i dont really use this lol
 
    //F must be locked for use by the current process.
    ASSERT (lock_held_by_current_thread(&f->lock));
