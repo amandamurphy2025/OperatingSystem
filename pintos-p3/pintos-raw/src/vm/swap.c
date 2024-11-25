@@ -71,7 +71,7 @@ swap_out (struct page *p)
   // - block_write()
 
   lock_acquire(&swap_lock);
-  //tried cnt = PAGE_SECTORS and caused errors
+  //tried cnt = PAGE_SECTORS and caused errors - bitmap only needs 1 bit
   size_t swap_slot = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
   if (swap_slot == BITMAP_ERROR){
     return false;
@@ -85,10 +85,6 @@ swap_out (struct page *p)
   for (size_t i = 0 ; i < PAGE_SECTORS ; i++){
     block_write(swap_device, p->swap_sect + i, p->frame->base + (i * BLOCK_SECTOR_SIZE));
   }
-
-  p->file = NULL;
-  p->file_bytes = 0;
-  p->file_offset = 0;
 
   return true;
     

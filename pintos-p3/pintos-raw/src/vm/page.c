@@ -25,10 +25,10 @@ static void destroy_page (struct hash_elem *p_, void *aux UNUSED)  {
 /* Destroys the current process's page table. */
 void page_exit (void)  {
    //call me in process_exit
-   struct hash *h = thread_current ()->pages;
-   if (h != NULL){
+   struct hash *hash_table = thread_current ()->pages;
+   if (hash_table != NULL){
       //destroy the page table hash
-      hash_destroy(h, destroy_page);
+      hash_destroy(hash_table, destroy_page);
    }
 }
 
@@ -82,7 +82,9 @@ static bool do_page_in (struct page *p) {
    //the -1 is a marker that it has not been swapped out
    if (p->swap_sect != (block_sector_t) - 1){
       swap_in(p);
-   } else if (p->file != NULL){
+      return true;
+   }
+   if (p->file != NULL){
       //load file data into memory
       off_t read = file_read_at(p->file, p->frame->base, p->file_bytes, p->file_offset);
       //if the read is less than a page, we 0 out the rest of the bytes with memset
@@ -94,10 +96,10 @@ static bool do_page_in (struct page *p) {
          frame_unlock(p->frame);
          return false;
       }
-   } else {
-      //initialize page to 0 if no file or anything
-      memset(p->frame->base, 0, PGSIZE);
-   }
+      return true;
+   } 
+   //initialize page to 0 if no file or anything
+   memset(p->frame->base, 0, PGSIZE);
    return true;
 }
 
@@ -158,6 +160,9 @@ bool page_out (struct page *p) {
    }
 
    if (success){
+      p->file = NULL;
+      p->file_bytes = 0;
+      p->file_offset = 0;
       // hash_delete(p->thread->pages, &p->hash_elem);
       //should the frame->page be set null too?
       p->frame = NULL;
@@ -172,16 +177,7 @@ bool page_out (struct page *p) {
 bool page_accessed_recently (struct page *p) {
    //we dont actually need this for our scuffed "clock" algorithm for eviction
 
-   bool accessed_recently_queen;
-
-   ASSERT(p->frame != NULL);
-   //ASSERT(lock_held_by_current_thread(&p->frame->lock));
-
-   accessed_recently_queen = pagedir_is_accessed(p->thread->pagedir, p->addr);
-   if (accessed_recently_queen){
-      pagedir_set_accessed(p->thread->pagedir, p->addr, false);
-   }
-   return accessed_recently_queen;
+   return NULL;
 
 }
 
@@ -209,7 +205,7 @@ struct page * page_allocate (void *vaddr, bool read_only) {
       //put the page into the hash table of the thread
       if (hash_insert(curr_thread->pages, &p->hash_elem) != NULL){
          free(p);
-         p = NULL;
+         return NULL;
       }
    }
    return p;
@@ -219,24 +215,8 @@ struct page * page_allocate (void *vaddr, bool read_only) {
 /* Evicts the page containing address VADDR
    and removes it from the page table. */
 void page_deallocate (void *vaddr) {
-   //ended up not using this but did the same sort of thing in frame_alloc
-
-   struct page *p = page_for_addr(vaddr);
-   ASSERT(p != NULL);
-
-   lock_acquire(&p->frame->lock);
-   if (p->frame != NULL){
-      if (p->file){
-         page_out(p);
-      }
-      p->frame->page = NULL;
-      lock_release(&p->frame->lock);
-      p->frame = NULL;
-   }
-
-   //delete from the thread's hash table
-   hash_delete(p->thread->pages, &p->hash_elem);
-   free(p);
+   //ended up not using this but did the same sort of idea in frame_alloc
+   return NULL;
    
 }
 
@@ -302,6 +282,8 @@ bool page_lock (const void *addr, bool will_write) {
 void page_unlock (const void *addr) {
    struct page *page = page_for_addr(addr);
    if (page != NULL){
-      frame_unlock(page->frame);
+      if (page->frame != NULL){
+         frame_unlock(page->frame);
+      }
    }
 }
