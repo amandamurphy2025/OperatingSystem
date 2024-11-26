@@ -1,3 +1,0 @@
-Code : 100 (of max 100)
-Doc  : 10 (of max 10)
-Total: 110 (of max 110)
