@@ -210,7 +210,7 @@ bool sys_create (const char *file, unsigned initial_size){
 
   bool created;
   lock_acquire(&filesys_lock);
-  created = filesys_create(filename, initial_size);
+  created = filesys_create(filename, initial_size, FILE_INODE);
   lock_release(&filesys_lock);
 
   //free the copy_in_string thing

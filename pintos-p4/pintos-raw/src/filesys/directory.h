@@ -6,15 +6,15 @@
 #include "devices/block.h"
 
 /* Maximum length of a file name component.
-   This is the traditional UNIX maximum length.
-   After directories are implemented, this maximum length may be
-   retained, but much longer full path names must be allowed. */
+This is the traditional UNIX maximum length.
+After directories are implemented, this maximum length may be
+retained, but much longer full path names must be allowed. */
 #define NAME_MAX 14
 
 struct inode;
 
 /* Opening and closing directories. */
-bool dir_create (block_sector_t sector, size_t entry_cnt);
+struct inode *dir_create (block_sector_t sector, block_sector_t parent_sector);
 struct dir *dir_open (struct inode *);
 struct dir *dir_open_root (void);
 struct dir *dir_reopen (struct dir *);
