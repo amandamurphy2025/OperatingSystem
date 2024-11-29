@@ -3,13 +3,15 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include <stdbool.h>
 
 /* An open file. */
 struct file 
   {
     struct inode *inode;        /* File's inode. */
     off_t pos;                  /* Current position. */
-    bool deny_write;            /* Has file_deny_write() been called? */
+    bool deny_dummy;            /* deny_write has "random" values without this */
+    bool deny_write;            /* Has file_deny_write() been called? */   
   };
 
 /* Creates a file in the given SECTOR,
@@ -19,6 +21,7 @@ On failure, SECTOR is released in the free map. */
 struct inode *
 file_create (block_sector_t sector, off_t length)
 {
+  //printf("inode create! %d\n", sector);
   //printf("file create\n");
   /* setup file */
   struct inode *inode = inode_create (sector, FILE_INODE);
@@ -52,7 +55,8 @@ file_open (struct inode *inode)
       inode_reopen(inode);
       file->inode = inode;
       file->pos = 0;
-      file->deny_write = false;
+      file->deny_dummy = 0;
+      file->deny_write = 0;
       return file;
     }
   else
@@ -77,6 +81,8 @@ file_close (struct file *file)
 {
   if (file != NULL)
     {
+      // printf("file->deny_write %d\n", file->deny_write);
+      // printf("file->deny_dummy, %d\n", file->deny_dummy);
       file_allow_write (file);
       inode_close (file->inode);
       free (file); 
@@ -149,10 +155,12 @@ file_write_at (struct file *file, const void *buffer, off_t size,
 void
 file_deny_write (struct file *file) 
 {
+  // printf("file deny write %x\n", file->inode);
   ASSERT (file != NULL);
   if (!file->deny_write) 
     {
-      file->deny_write = true;
+      file->deny_write = 1;
+      file->deny_dummy = 1;
       inode_deny_write (file->inode);
     }
 }
@@ -163,10 +171,15 @@ file_deny_write (struct file *file)
 void
 file_allow_write (struct file *file) 
 {
+  // printf("file allow write %x\n", file->inode);
+  // printf("file deny_write var %d\n", file->deny_write);
+  // printf("file deny_dummy, %d\n", file->deny_dummy);
   ASSERT (file != NULL);
   if (file->deny_write) 
     {
-      file->deny_write = false;
+      // printf("what\n");
+      file->deny_write = 0;
+      file->deny_dummy = 0;
       inode_allow_write (file->inode);
     }
 }
@@ -176,6 +189,7 @@ off_t
 file_length (struct file *file) 
 {
   ASSERT (file != NULL);
+  //printf("file length inode %d\n", file->inode);
   return inode_length (file->inode);
 }
 

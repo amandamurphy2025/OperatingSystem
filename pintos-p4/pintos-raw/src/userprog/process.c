@@ -305,6 +305,7 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", filename);
       goto done; 
     }
+  
   // deny write to open executables
   file_deny_write(file);
   t->executable = file;

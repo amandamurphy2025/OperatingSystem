@@ -131,11 +131,11 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  // for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-  //      ofs += sizeof e) 
-  // {
-  //   printf("name: %s\n", e.name);
-  // }
+  /*for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e) 
+  {
+    printf("name: %s\n", e.name);
+  }*/
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 

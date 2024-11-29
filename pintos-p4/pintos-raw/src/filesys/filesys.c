@@ -113,6 +113,10 @@ or if internal memory allocation fails. */
 bool
 filesys_create (const char *name, off_t initial_size, enum inode_type type)
 {
+  if (name == NULL || !strcmp(name, ""))
+  {
+    sys_exit(-1);
+  }
   //printf("filesys create\n");
 // NOTE: The third parameter specifies whether to create a directory or file
 // ...
@@ -128,10 +132,16 @@ filesys_create (const char *name, off_t initial_size, enum inode_type type)
     && dir_add(dir, name, inode_sector)
   );
 
-  if (!success && inode_sector != 0)
+  //printf("name %s\n", name);
+  //printf("initial size %d\n", initial_size);
+  //printf("success %d\n", success);
+  //for (long i = 0; i < 500000000; i++);
+
+  /* should I include this? */
+  /*&if (!success && inode_sector != 0) 
   {
     free_map_release(&inode_sector);
-  }
+  }*/
 
   if (dir != NULL)
   {
@@ -178,6 +188,10 @@ filesys_open (const char *name)
     dir_lookup(dir, name, &inode);
   dir_close(dir);
 
+  //printf("openening %s\n", name);
+  //printf("inode get length\n");
+  //inode_length(inode);
+
   return inode;
 }
 
@@ -206,8 +220,15 @@ or if an internal memory allocation fails. */
 bool
 filesys_remove (const char *name)
 {
-  printf("filesys_remove not implemented\n");
-  return false;
+  struct dir *dir = dir_open_root();
+  bool success = 
+  (
+    dir != NULL
+    && dir_remove(dir, name)
+  );
+  dir_close(dir);
+
+  return success;
 }
 
 // /* Deletes the file named NAME.

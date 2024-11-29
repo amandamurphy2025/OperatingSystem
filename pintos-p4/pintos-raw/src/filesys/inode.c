@@ -53,6 +53,7 @@ struct inode
   struct condition no_writers_cond; /* Signaled when no writers. */
   int deny_write_cnt; /* 0: writes ok, >0: deny writes. */
   int writer_cnt; /* Number of writers. */
+  unsigned magic;
 };
 
 // /* Returns the block device sector that contains byte offset POS
@@ -166,6 +167,7 @@ Returns a null pointer if memory allocation fails. */
 struct inode *
 inode_open (block_sector_t sector)
 {
+  // printf("inode open! %d\n", sector);
   //printf("inode open\n");
 // Don't forget to access open_inodes list
   struct list_elem *e;
@@ -195,13 +197,14 @@ inode_open (block_sector_t sector)
   //printf("initializing inode\n");
   /* initialize */
   inode->sector = sector;
-  inode->open_cnt = 0;
+  inode->open_cnt = 1;
   inode->removed = false;
   lock_init(&inode->lock);
   lock_init(&inode->deny_write_lock);
   cond_init(&inode->no_writers_cond);
   inode->deny_write_cnt = 0;
   inode->writer_cnt = 0;
+  inode->magic = INODE_MAGIC;
 
   //printf("adding to open inodes list\n");
   /* add to open inodes list */
@@ -252,6 +255,7 @@ inode_open (block_sector_t sector)
 struct inode *
 inode_reopen (struct inode *inode)
 {
+  ASSERT(inode->open_cnt > 0);
   //printf("inode_reopen\n");
   if (inode != NULL)
   {
@@ -262,6 +266,7 @@ inode_reopen (struct inode *inode)
     //printf("lock released\n");
   }
   //printf("returning inode\n");
+  //printf("inode open count %d\n", inode->open_cnt);
   return inode;
 }
 
@@ -317,7 +322,7 @@ static void
 deallocate_recursive (block_sector_t sector, int level)
 {
 // deallocate_recursive, .....
-  printf("deallocate recursive not implemented\n");
+  // printf("deallocate recursive not implemented\n");
 }
 
 /* Deallocates the blocks allocated for INODE. */
@@ -326,7 +331,7 @@ deallocate_inode (const struct inode *inode)
 {
 // NOTE: you should call deallocate recursive here to
 // recursively iterate each level of indirection ..
-  printf("Deallocate inode not implemented\n");
+  //printf("Deallocate inode not implemented\n");
 }
 
 
@@ -605,9 +610,11 @@ off_t offset)
 void
 inode_deny_write (struct inode *inode) 
 {
+  // printf("inode deny write\n");
   lock_acquire(&inode->deny_write_lock);
   inode->deny_write_cnt++;
   lock_release(&inode->deny_write_lock);
+  // printf("inode deny write count %d\n", inode->deny_write_cnt);
 
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
 }
@@ -618,6 +625,7 @@ inode_deny_write (struct inode *inode)
 void
 inode_allow_write (struct inode *inode) 
 {
+  // printf("deny write count %d\n", inode->deny_write_cnt);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
 
@@ -631,10 +639,16 @@ off_t
 inode_length (const struct inode *inode)
 {
   ASSERT(inode != NULL);
+  //printf("inode->sector, %d\n", inode->sector);
+  //printf("inode magic, %d\n", inode->magic == INODE_MAGIC);
+  //printf("\n");
 
-  struct inode_disk disk_inode;
-  block_read(fs_device, inode->sector, &disk_inode);
-  return disk_inode.length;
+  struct inode_disk *disk_inode = calloc(1, sizeof *disk_inode);
+  block_read(fs_device, inode->sector, disk_inode);
+  off_t length = disk_inode->length;
+  free(disk_inode);
+  return length;
+  
 }
 
 /* Returns the number of openers. */

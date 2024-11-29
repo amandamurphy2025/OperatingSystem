@@ -198,7 +198,6 @@ static int sys_exec (const char *cmd_line){
 
 //use filesys_create from filesys.c. T on success, F if fail.
 bool sys_create (const char *file, unsigned initial_size){
-  
   if (file == NULL || !is_user_vaddr(file)){
     sys_exit(-1);
   }
@@ -252,7 +251,7 @@ int sys_open (const char *file){
   }
 
   lock_acquire(&filesys_lock);
-  struct file *filereal = filesys_open(filename);
+  struct file *filereal = file_open (filesys_open(filename));
 
   if (filereal == NULL){
     return -1;
