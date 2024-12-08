@@ -55,7 +55,7 @@ file name part. */
 // 3rd get_next_part(part, name) // part: "c" name: ""
 // you get the idea :)
 static int
-get_next_part (char part[NAME_MAX], const char **srcp)
+get_next_part (char part[NAME_MAX + 1], const char **srcp)
 {
 const char *src = *srcp;
 char *dst = part;

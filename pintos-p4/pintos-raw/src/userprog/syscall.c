@@ -505,13 +505,13 @@ bool sys_chdir(const char *dir)
 
 bool sys_mkdir(const char *dir)
 {
-  if (dir == NULL || !is_user_vaddr(dir) || !strcmp(dir, "")){
+  if (dir == NULL || !is_user_vaddr(dir)){
     sys_exit(-1);
   }
 
   char *dirname = copy_in_string(dir);
-  if (dirname == NULL){
-    return -1;
+  if (dirname == NULL || !strcmp(dirname, "")){
+    return false;
   }
 
   bool created;
