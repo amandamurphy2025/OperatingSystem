@@ -502,6 +502,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->parent = NULL;
   t->child_process = NULL;
 
+  t->cwd = NULL; // what should this be
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);

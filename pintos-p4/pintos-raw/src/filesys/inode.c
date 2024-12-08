@@ -363,7 +363,7 @@ calculate_indices (off_t sector_idx, size_t offsets[], size_t *offset_cnt)
   {
     *offset_cnt = 2;
     offsets[0] = DIRECT_CNT;
-    offsets[1] = (sector_idx - DIRECT_CNT) % PTRS_PER_SECTOR; 
+    offsets[1] = (sector_idx - DIRECT_CNT); //% PTRS_PER_SECTOR; 
   }
   else
   {
@@ -505,7 +505,9 @@ extend_file (struct inode *inode, off_t length)
 {
   struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
   block_read(fs_device, inode->sector, disk_inode);
-  disk_inode->length = length;
+  if (disk_inode->length < length) {
+    disk_inode->length = length;
+  }
   block_write(fs_device, inode->sector, disk_inode);
   free(disk_inode);
 
@@ -612,6 +614,9 @@ inode_deny_write (struct inode *inode)
 {
   // printf("inode deny write\n");
   lock_acquire(&inode->deny_write_lock);
+  while (inode->writer_cnt > 0) {
+    cond_wait(&inode->no_writers_cond, &inode->deny_write_lock);
+  }
   inode->deny_write_cnt++;
   lock_release(&inode->deny_write_lock);
   // printf("inode deny write count %d\n", inode->deny_write_cnt);

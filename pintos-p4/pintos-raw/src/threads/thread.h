@@ -112,6 +112,7 @@ struct thread
 
     /* Chris added here */
     struct file *executable;
+    struct dir *cwd;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

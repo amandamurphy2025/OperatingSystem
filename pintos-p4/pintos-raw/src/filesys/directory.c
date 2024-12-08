@@ -6,6 +6,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir
@@ -131,11 +132,13 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  /*for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e) 
-  {
-    printf("name: %s\n", e.name);
-  }*/
+  // printf("lookup\n");
+  // printf("cwd %x\n", thread_current()->cwd);
+  // for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  //      ofs += sizeof e) 
+  // {
+  //   printf("name: %s\n", e.name);
+  // }
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
@@ -187,7 +190,6 @@ error occurs. */
 bool
 dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 {
-  //printf("dir_add\n");
 struct dir_entry e;
 off_t ofs;
 bool success = false;
@@ -210,6 +212,7 @@ for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 ofs += sizeof e)
 if (!e.in_use)
 break;
+
 /* Write slot. */
 e.in_use = true;
 strlcpy (e.name, name, sizeof e.name);

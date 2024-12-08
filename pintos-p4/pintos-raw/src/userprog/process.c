@@ -299,7 +299,10 @@ load (const char *cmd_line, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = file_open(filesys_open (filename));
+  //struct inode *inode = filesys_open(filename);
+  //printf("inode %x\n", inode);
+
+  file = file_open(filesys_open(filename));
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", filename);

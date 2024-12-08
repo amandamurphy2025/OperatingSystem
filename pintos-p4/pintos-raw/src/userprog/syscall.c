@@ -33,6 +33,11 @@ int sys_write (int fd, const void *buffer, unsigned size);
 void sys_seek (int fd, unsigned position);
 unsigned sys_tell (int fd);
 void sys_close (int fd);
+bool sys_chdir (const char *dir);
+bool sys_mkdir (const char *dir);
+bool sys_readdir (int fd, char *name);
+bool sys_isdir (int fd);
+int sys_inumber (int fd);
 
 void get_args_sys_halt(struct intr_frame *f, int *args);
 void get_args_sys_exit(struct intr_frame *f, int *args);
@@ -47,6 +52,11 @@ void get_args_sys_write(struct intr_frame *f, int *args);
 void get_args_sys_seek(struct intr_frame *f, int *args);
 void get_args_sys_tell(struct intr_frame *f, int *args);
 void get_args_sys_close(struct intr_frame *f, int *args);
+void get_args_sys_chdir(struct intr_frame *f, int *args);
+void get_args_sys_mkdir(struct intr_frame *f, int *args);
+void get_args_sys_readdir(struct intr_frame *f, int *args);
+void get_args_sys_isdir(struct intr_frame *f, int *args);
+void get_args_sys_inumber(struct intr_frame *f, int *args);
 
 /*HELPER FUNCTIONS DECLARED HERE*/
 struct file_descriptor *lookup_fd(int handle);
@@ -74,8 +84,12 @@ syscall_function table[] = {
   get_args_sys_write,
   get_args_sys_seek,
   get_args_sys_tell,
-  get_args_sys_close
-
+  get_args_sys_close,
+  get_args_sys_readdir,
+  get_args_sys_isdir,
+  get_args_sys_chdir,
+  get_args_sys_mkdir,
+  get_args_sys_inumber
 };
 
 //functions to get the args for the handlers
@@ -131,6 +145,26 @@ void get_args_sys_close(struct intr_frame *f, int *args){
   sys_close(args[0]);
 }
 
+void get_args_sys_chdir(struct intr_frame *f, int *args) {
+  f->eax = sys_chdir((const char *) args[0]);
+}
+
+void get_args_sys_mkdir(struct intr_frame *f, int *args) {
+  f->eax = sys_mkdir((const char *) args[0]);
+}
+
+void get_args_sys_readdir(struct intr_frame *f, int *args) {
+  f->eax = sys_readdir((int) args[0], (char *) args[1]);
+}
+
+void get_args_sys_isdir(struct intr_frame *f, int *args) {
+  f->eax = sys_isdir((int) args[0]);
+}
+
+void get_args_sys_inumber(struct intr_frame *f, int *args) {
+  f->eax = sys_inumber((int) args[0]);
+}
+
 //this feels stupid but number of args per handler
 const int arg_counts[] = {
   0,
@@ -145,12 +179,16 @@ const int arg_counts[] = {
   3,
   2,
   1,
+  1,
+  1,
+  1,
+  2,
+  1,
   1
 };
 
 
 static int sys_exec (const char *cmd_line){
-  
   if (cmd_line == NULL || !is_user_vaddr(cmd_line)){
     sys_exit(-1);
   }
@@ -458,6 +496,51 @@ int sys_wait(tid_t t) {
 
   return ret;
 
+}
+
+bool sys_chdir(const char *dir)
+{
+  return filesys_chdir(dir);
+}
+
+bool sys_mkdir(const char *dir)
+{
+  if (dir == NULL || !is_user_vaddr(dir) || !strcmp(dir, "")){
+    sys_exit(-1);
+  }
+
+  char *dirname = copy_in_string(dir);
+  if (dirname == NULL){
+    return -1;
+  }
+
+  bool created;
+  lock_acquire(&filesys_lock);
+  created = filesys_create(dirname, 0, DIR_INODE);
+  lock_release(&filesys_lock);
+
+  //free the copy_in_string thing
+  palloc_free_page(dirname);
+
+  return created;
+}
+
+bool sys_readdir(int fd, char *name)
+{
+  printf("sys_readdir not implemented\n");
+  return false;
+}
+
+bool sys_isdir(int fd)
+{
+  printf("sys_isdir not implemnted yet\n");
+  return false;
+}
+
+int sys_inumber(int fd)
+{
+  printf("sys_inumber is not implemented yet\n");
+  return -1;
 }
 
 void

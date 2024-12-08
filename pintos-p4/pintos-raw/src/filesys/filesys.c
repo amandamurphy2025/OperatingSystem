@@ -82,18 +82,68 @@ return 1;
 }
 
 /* Resolves relative or absolute file NAME.
-Returns true if successful, false on failure.
-Stores the directory corresponding to the name into *DIRP,
-and the file name part into BASE_NAME. */
+   Returns true if successful, false on failure.
+   Stores the directory corresponding to the name into *DIRP,
+   and the file name part into BASE_NAME. */
 static bool
 resolve_name_to_entry (const char *name,
-struct dir **dirp, char base_name[NAME_MAX + 1])
+                       struct dir **dirp, char base_name[NAME_MAX + 1]) 
 {
-  // NOTE: maybe we need get_next_part here to chop the name?
-  // ...
-  printf("resolve_name_to_entry not implemented\n");
-  return false;
+  if (name == NULL || strlen(name) == 0) 
+    return false;
+
+  /* Determine starting directory (current working directory or root). */
+  struct dir *dir = thread_current()->cwd;
+  if (name[0] == '/' || dir == NULL) 
+  {
+    dir = dir_open_root();
+  } 
+
+  if (dir == NULL)
+    return false;
+
+  /* Parse the path component by component. */
+  char part[NAME_MAX + 1];
+  struct inode *inode = NULL;
+
+  while (get_next_part(part, &name) == 1) 
+  {
+    //printf("part(loop): %s\n", part);
+    //printf("name(loop): %s\n", name);
+    /* Lookup the next part in the directory. */
+    if (!dir_lookup(dir, part, &inode)) 
+    {
+      break; // Part not found.
+    }
+
+    /* If the found inode is a directory, move into it. */
+    if (inode_get_type(inode) == DIR_INODE && strcmp(name, "")) 
+    {
+      struct dir *next_dir = dir_open(inode);
+      if (next_dir == NULL) 
+      {
+        inode_close(inode);
+        dir_close(dir);
+        return false; // Failed to open directory.
+      }
+      dir_close(dir);
+      dir = next_dir;
+    } 
+    // else 
+    // {
+    //   /* Found a file in the middle of the path. */
+    //   inode_close(inode);
+    //   dir_close(dir);
+    //   return false;
+    // }
+  }
+
+  /* Copy the last part of the path into base_name. */
+  strlcpy(base_name, part, NAME_MAX + 1);
+  *dirp = dir;
+  return true;
 }
+
 
 /* Resolves relative or absolute file NAME to an inode.
 Returns an inode if successful, or a null pointer on failure.
@@ -101,9 +151,24 @@ The caller is responsible for closing the returned inode. */
 static struct inode *
 resolve_name_to_inode (const char *name)
 {
-  // ...
-  printf("resolve_name_to_inode not implemented\n");
-  return NULL;
+  //printf("resolve_name_to_inode %s\n", name);
+  struct dir *dir;
+  char base_name[NAME_MAX + 1];
+  struct inode *inode;
+
+  if(!resolve_name_to_entry(name, &dir, base_name))
+  {
+    return NULL;
+  }
+
+  //printf("base name %s\n", base_name);
+  if (dir != NULL)
+    dir_lookup(dir, base_name, &inode);
+  dir_close(dir);
+
+
+
+  return inode;
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
@@ -117,25 +182,47 @@ filesys_create (const char *name, off_t initial_size, enum inode_type type)
   {
     sys_exit(-1);
   }
-  //printf("filesys create\n");
-// NOTE: The third parameter specifies whether to create a directory or file
-// ...
-// TODO look at type
-
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root(); // TODO: what should this be? 
-
-  bool success = (
-    dir != NULL
-    && free_map_allocate(&inode_sector)
-    && file_create(inode_sector, initial_size)
-    && dir_add(dir, name, inode_sector)
-  );
 
   //printf("name %s\n", name);
-  //printf("initial size %d\n", initial_size);
-  //printf("success %d\n", success);
-  //for (long i = 0; i < 500000000; i++);
+
+  block_sector_t inode_sector = 0;
+  struct dir *dir;
+  char base_name[NAME_MAX + 1];
+  bool resolved = resolve_name_to_entry(name, &dir, base_name); // return type?
+  bool success = false;
+
+  if (base_name == NULL || !strcmp(base_name, ""))
+  {
+    printf("basename issue\n");
+  }
+
+  //printf("resolved %d\n", resolved);
+  //printf("base_name %s\n", base_name);
+
+  if (type == FILE_INODE)
+  {
+    // printf("file create\n");
+    // printf("1. %d\n", dir != NULL);
+    // printf("2. %d\n", free_map_allocate(&inode_sector));
+    // printf("3. %d\n", file_create(inode_sector, initial_size));
+    // printf("4. %d\n", dir_add(dir, base_name, inode_sector));
+    success = (
+      dir != NULL
+      && free_map_allocate(&inode_sector)
+      && file_create(inode_sector, initial_size)
+      && dir_add(dir, base_name, inode_sector)
+    );
+  }
+  else
+  {
+    success = (
+      dir != NULL
+      && free_map_allocate(&inode_sector)
+      && dir_create(inode_sector, inode_get_inumber(dir_get_inode(dir)))
+      && dir_add(dir, base_name, inode_sector)
+    );
+  }
+  
 
   /* should I include this? */
   /*&if (!success && inode_sector != 0) 
@@ -179,20 +266,7 @@ or if an internal memory allocation fails. */
 struct inode *
 filesys_open (const char *name)
 {
-// NOTE: Returning an inode* pointer instead of a file pointer to support opening directories or files.
-// ...
-  struct dir *dir = dir_open_root();
-  struct inode *inode = NULL;
-
-  if (dir != NULL) 
-    dir_lookup(dir, name, &inode);
-  dir_close(dir);
-
-  //printf("openening %s\n", name);
-  //printf("inode get length\n");
-  //inode_length(inode);
-
-  return inode;
+  return resolve_name_to_inode(name);
 }
 
 // /* Opens the file with the given NAME.
@@ -220,11 +294,14 @@ or if an internal memory allocation fails. */
 bool
 filesys_remove (const char *name)
 {
-  struct dir *dir = dir_open_root();
+  struct dir *dir;
+  char base_name[NAME_MAX + 1];
+
   bool success = 
   (
-    dir != NULL
-    && dir_remove(dir, name)
+    resolve_name_to_entry(name, &dir, base_name)
+    && dir != NULL
+    && dir_remove(dir, base_name)
   );
   dir_close(dir);
 
@@ -250,9 +327,17 @@ Return true if successful, false on failure. */
 bool
 filesys_chdir (const char *name)
 {
-// ...
-  printf("filesys_chdir not implemented\n");
-  return false;
+  //printf("filesys_chdir\n");
+  struct inode *inode = resolve_name_to_inode(name);
+  if (inode == NULL || inode_get_type(inode) != DIR_INODE)
+  {
+    return false;
+  }
+
+  if(thread_current()->cwd)
+    dir_close(thread_current()->cwd);
+  thread_current()->cwd = dir_open(inode);
+  return true;
 }
 
 /* Formats the file system. */
