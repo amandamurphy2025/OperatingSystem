@@ -289,14 +289,42 @@ int sys_open (const char *file){
   }
 
   lock_acquire(&filesys_lock);
-  struct file *filereal = file_open (filesys_open(filename));
-
-  if (filereal == NULL){
+  struct inode *inode;
+  if (!strcmp(filename, "/"))
+  {
+    inode = inode_open(ROOT_DIR_SECTOR);
+  }
+  else
+  {
+    inode = filesys_open(filename);
+  }
+  
+  if (inode == NULL)
+  {
     return -1;
   }
 
-  int fd = add_file_to_file_table(filereal);
+  int fd = -1;
+  if (inode_get_type(inode) == FILE_INODE)
+  {
+    struct file *filereal = file_open (inode);
+    if (filereal == NULL){
+      return -1;
+    }
 
+    fd = add_file_to_file_table(filereal);
+  }
+  else
+  {
+    struct dir *dir = dir_open(inode);
+    if (dir == NULL)
+    {
+      return -1;
+    }
+
+    fd = add_dir_to_file_table(dir);
+  }
+  
   lock_release(&filesys_lock);
   palloc_free_page(filename);
 
@@ -468,9 +496,22 @@ int sys_write (int fd, const void *buffer, unsigned size){
       }
       nbytes = (unsigned)tmp;
     } else {
-      lock_acquire(&filesys_lock);
-      int tmp = file_write(filedescriptor->file, buffer, write_amount);
-      lock_release(&filesys_lock);
+      if (!lock_held_by_current_thread(&filesys_lock))
+        lock_acquire(&filesys_lock);
+
+      int tmp;
+      if (filedescriptor->file != NULL)
+      {
+        tmp = file_write(filedescriptor->file, buffer, write_amount);
+      }
+      else if (filedescriptor->dir != NULL)
+      {
+        return -1;
+      }
+
+      if (lock_held_by_current_thread(&filesys_lock))
+        lock_release(&filesys_lock);
+
       if (tmp < 0){
         break;
       }
@@ -685,6 +726,20 @@ struct file_descriptor *lookup_fd(int handle){
 
 }
 
+int add_dir_to_file_table(struct dir *dir)
+{
+  struct thread *curr = thread_current();
+  struct file_descriptor *fd = palloc_get_page(0);
+
+  fd->handle = curr->next_file;
+  fd->file = NULL;
+  fd->dir = dir;
+  list_push_back(&curr->files, &fd->elem);
+
+  curr->next_file += 1;
+  return fd->handle;
+}
+
 int add_file_to_file_table(struct file *add_me_file){
 
   struct thread *curr = thread_current();
@@ -693,6 +748,7 @@ int add_file_to_file_table(struct file *add_me_file){
   //should this loop through fd numbers to find the next available or is setting the next enough?
   fd->handle = curr->next_file;
   fd->file = add_me_file;
+  fd->dir = NULL;
   list_push_back(&curr->files, &fd->elem);
 
   curr->next_file += 1;
