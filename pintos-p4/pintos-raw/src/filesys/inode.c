@@ -393,7 +393,7 @@ void **data_block, block_sector_t *data_sector)
   size_t offsets[3];
   size_t offset_cnt;
   off_t sector_idx = offset / BLOCK_SECTOR_SIZE; // TODO is this right?
-  uint8_t *buffer = calloc(1, BLOCK_SECTOR_SIZE);
+  uint32_t *buffer = calloc(1, BLOCK_SECTOR_SIZE);
 
   calculate_indices(sector_idx, offsets, &offset_cnt);
   // printf("offset count %d\n", offset_cnt);
@@ -403,42 +403,49 @@ void **data_block, block_sector_t *data_sector)
   {
     // printf("in loop i:%d\n", i);
     block_read(fs_device, sector, buffer);
-    block_sector_t next_sector = ((block_sector_t *) buffer)[offsets[i]];
+    // block_sector_t next_sector = ((block_sector_t *) buffer)[offsets[i]];
 
     // printf("read block and got next sector\n");
     // printf("next sector: %d\n", next_sector);
     // printf("allocate?: %d\n", allocate);
 
-    if (next_sector == 0) // is this the right check?
+    if (buffer[offsets[i]] == 0) // is this the right check?
     {
       if (!allocate)
       {
         *data_block = NULL;
         *data_sector = 0;
-        return false; //?
+        free(buffer);
+        return true; //?
       }
 
       //printf("free map allocation\n");
-      if (!free_map_allocate(&next_sector))
+      if (!free_map_allocate(&buffer[offsets[i]]))
       {
+        free(buffer);
         // allocation of a new sector failed
         return false; 
       }
 
+      // printf("Here\n");
+
       //printf("new sector: %d\n", next_sector);
       // allocate new device with zeros
       char *zeros = calloc(1, BLOCK_SECTOR_SIZE);
-      block_write(fs_device, next_sector, zeros);
+      block_write(fs_device, buffer[offsets[i]], zeros);
+      free(zeros);
 
       // printf("block wrote\n");
 
       // update current sector with allocated block
-      ((block_sector_t *) buffer)[offsets[i]] = next_sector;
+      // ((block_sector_t *) buffer)[offsets[i]] = next_sector;
       block_write(fs_device, sector, buffer);
     }
 
-    sector = next_sector;
+    sector = buffer[offsets[i]];
   }
+
+  // printf("Sector of data %d\n", sector);
 
   // read data block and set data
   //printf("finished loop\n");
@@ -471,31 +478,33 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   block_sector_t target_sector = 0; // not really useful for inode_read
   while (size > 0)
   {
-  /* Sector to read, starting byte offset within sector, sector data. */
-  int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-  void *block; // NOTE: may need to be allocated in get_data_block method,
-  // and don't forget to free it in the end
-  /* Bytes left in inode, bytes left in sector, lesser of the two. */
-  off_t inode_left = inode_length (inode) - offset;
-  int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-  int min_left = inode_left < sector_left ? inode_left : sector_left;
-  /* Number of bytes to actually copy out of this sector. */
-  int chunk_size = size < min_left ? size : min_left;
-  if (chunk_size <= 0 || !get_data_block (inode, offset, false, &block,
-  &target_sector))
-  break;
-  if (block == NULL)
-  memset (buffer + bytes_read, 0, chunk_size);
-  else
-  {
-    memcpy (buffer + bytes_read, block + sector_ofs, chunk_size);
+    /* Sector to read, starting byte offset within sector, sector data. */
+    int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+    void *block; // NOTE: may need to be allocated in get_data_block method,
+    // and don't forget to free it in the end
+    /* Bytes left in inode, bytes left in sector, lesser of the two. */
+    off_t inode_left = inode_length (inode) - offset;
+    int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+    int min_left = inode_left < sector_left ? inode_left : sector_left;
+    /* Number of bytes to actually copy out of this sector. */
+    int chunk_size = size < min_left ? size : min_left;
+    if (chunk_size <= 0 || !get_data_block (inode, offset, false, &block, &target_sector)) {
+      break;
+    }
+
+    if (block == NULL)
+      memset (buffer + bytes_read, 0, chunk_size);
+    else
+    {
+      memcpy (buffer + bytes_read, block + sector_ofs, chunk_size);
+    }
+    /* Advance. */
+    size -= chunk_size;
+    offset += chunk_size;
+    bytes_read += chunk_size;
+    free(block); // NOTE: if needed?
   }
-  /* Advance. */
-  size -= chunk_size;
-  offset += chunk_size;
-  bytes_read += chunk_size;
-  free(block); // NOTE: if needed?
-  }
+  // printf("Reading bytes %zu, offset %zu\n", bytes_read, offset);
   return bytes_read;
 }
 
@@ -565,8 +574,8 @@ off_t offset)
   lock_acquire (&inode->deny_write_lock);
   if (inode->deny_write_cnt)
   {
-  lock_release (&inode->deny_write_lock);
-  return 0;
+    lock_release (&inode->deny_write_lock);
+    return 0;
   }
   inode->writer_cnt++;
   lock_release (&inode->deny_write_lock);
@@ -574,35 +583,35 @@ off_t offset)
   //printf("inode write at 2\n");
   while (size > 0)
   {
-    //printf("size > 0: %d\n", size);
-  /* Sector to write, starting byte offset within sector, sector data. */
-  int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-  void *block; // may need to be allocated in get_data_block method,
-  // and don't forget to free it in the end
-  /* Bytes to max inode size, bytes left in sector, lesser of the two. */
-  off_t inode_left = INODE_SPAN - offset;
-  int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-  int min_left = inode_left < sector_left ? inode_left : sector_left;
-  /* Number of bytes to actually write into this sector. */
-  int chunk_size = size < min_left ? size : min_left;
-  if (chunk_size <= 0 || !get_data_block (inode, offset, true, &block,
-  &target_sector))
-  break;
-  //printf("got data block\n");
-  memcpy (block + sector_ofs, buffer + bytes_written, chunk_size);
-  block_write(fs_device, target_sector, block);
-  /* Advance. */
-  size -= chunk_size;
-  offset += chunk_size;
-  bytes_written += chunk_size;
-  free(block); // NOTE: if needed?
+      //printf("size > 0: %d\n", size);
+    /* Sector to write, starting byte offset within sector, sector data. */
+    int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+    void *block; // may need to be allocated in get_data_block method,
+    // and don't forget to free it in the end
+    /* Bytes to max inode size, bytes left in sector, lesser of the two. */
+    off_t inode_left = INODE_SPAN - offset;
+    int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+    int min_left = inode_left < sector_left ? inode_left : sector_left;
+    /* Number of bytes to actually write into this sector. */
+    int chunk_size = size < min_left ? size : min_left;
+    if (chunk_size <= 0 || !get_data_block (inode, offset, true, &block,
+    &target_sector))
+      break;
+    //printf("got data block\n");
+    memcpy (block + sector_ofs, buffer + bytes_written, chunk_size);
+    block_write(fs_device, target_sector, block);
+    /* Advance. */
+    size -= chunk_size;
+    offset += chunk_size;
+    bytes_written += chunk_size;
+    free(block); // NOTE: if needed?
   }
 
   //printf("inode write at 3\n");
   extend_file (inode, offset);
   lock_acquire (&inode->deny_write_lock);
   if (--inode->writer_cnt == 0)
-  cond_signal (&inode->no_writers_cond, &inode->deny_write_lock);
+    cond_signal (&inode->no_writers_cond, &inode->deny_write_lock);
   lock_release (&inode->deny_write_lock);
   return bytes_written;
 }

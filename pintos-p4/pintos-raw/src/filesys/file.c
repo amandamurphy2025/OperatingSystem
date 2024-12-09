@@ -33,11 +33,17 @@ file_create (block_sector_t sector, off_t length)
 
   if (length > 0)
   {
-    char *zeros = calloc(length, sizeof(char));
+    // char *zeros = calloc(length, sizeof(char));
     
-    int bytes_written = inode_write_at (inode, zeros, length, 0);
+    int bytes_written = inode_write_at (inode, "", 1, length - 1);
+    if (bytes_written != 1) {
+      inode_remove(inode);
+      inode_close(inode);
+      free_map_release(sector);
+      return NULL;
+    }
 
-    ASSERT(bytes_written == length);
+    // ASSERT(bytes_written == length);
   }
   
   return inode;
@@ -104,6 +110,7 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
+  // printf("FILE_READ size %zu\n", size);
   off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_read;
   return bytes_read;

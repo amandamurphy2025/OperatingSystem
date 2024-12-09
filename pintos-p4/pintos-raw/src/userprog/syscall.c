@@ -366,7 +366,10 @@ int sys_read (int fd, void *buffer, unsigned size){
   int sizeToRead = size;
   int bytes_read = 0;
 
-  while (sizeToRead > 0){
+  // printf("Reading size %d\n", size);
+  // int bytes_read = file_read(filedescriptor->file, buffer, size);
+
+  while (sizeToRead > 0) {
     unsigned nbytes;
     unsigned read_amount = sizeToRead;
 
@@ -474,6 +477,8 @@ int sys_write (int fd, const void *buffer, unsigned size){
 
   int sizeToWrite = size;
   int bytes_written = 0;
+  // int bytes_written = file_write(filedescriptor->file, buffer, size);
+
 
   while (sizeToWrite > 0){
     unsigned nbytes;
