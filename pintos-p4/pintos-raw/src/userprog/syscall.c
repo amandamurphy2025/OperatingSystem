@@ -14,6 +14,8 @@
 #include "devices/shutdown.h"
 #include "userprog/exception.h"
 #include "userprog/pagedir.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
 
 
 static struct lock filesys_lock;
@@ -573,20 +575,51 @@ bool sys_mkdir(const char *dir)
 
 bool sys_readdir(int fd, char *name)
 {
-  printf("sys_readdir not implemented\n");
+  struct file_descriptor *file_desc = lookup_fd(fd);
+
+  if (file_desc->dir != NULL){
+    return dir_readdir(file_desc->dir, name);
+  }
+
+  
+  // check if dir
+  // dir_readdir
   return false;
 }
 
 bool sys_isdir(int fd)
 {
-  printf("sys_isdir not implemnted yet\n");
-  return false;
+  struct file_descriptor *file_desc = lookup_fd(fd);
+  struct inode *inode;
+
+  if (file_desc->file != NULL)
+  {
+    return false;
+  }
+  else if (file_desc->dir != NULL)
+  {
+    return true;
+  }
 }
 
 int sys_inumber(int fd)
 {
-  printf("sys_inumber is not implemented yet\n");
-  return -1;
+  //get inode from fd
+  //check inode_get_inumber
+  //return that
+  struct file_descriptor *file_desc = lookup_fd(fd);
+  struct inode *inode;
+
+  if (file_desc->file != NULL)
+  {
+    inode = file_get_inode (file_desc->file);
+  }
+  else if (file_desc->dir != NULL)
+  {
+    inode = dir_get_inode (file_desc->dir);
+  }
+
+  return inode_get_inumber(inode);
 }
 
 void
